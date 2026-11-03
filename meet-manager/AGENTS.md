@@ -4,9 +4,10 @@ This file is the shared source of truth for AI coding agents working in this dir
 
 ## Project overview
 
-- Product: Meet Manager, a client-side Google Meet link organizer.
+- Product: Shared Link Manager, a group-based shared link reservation app.
 - Framework: Next.js App Router with React 19.
 - UI: HeroUI v3, Tailwind CSS v4, and Iconify using the Gravity UI icon set.
+- Backend services: Supabase Auth, PostgreSQL, RLS, RPC functions, and Realtime; no separately hosted application backend.
 - Typography: Inter, loaded globally from Google Fonts.
 - Language: JavaScript / JSX.
 - Hosting: GitHub Pages using Next.js static export.
@@ -26,20 +27,21 @@ This file is the shared source of truth for AI coding agents working in this dir
 - This project is deployed to GitHub Pages. Keep `output: "export"`, `basePath: "/meet-manager"`, and `trailingSlash: true` in `next.config.mjs`.
 - The root homepage belongs to the parent GitHub Pages site. Do not replace or modify root-level homepage files as part of Meet Manager work.
 - The deployment workflow builds this app and copies its static output into the `meet-manager/` path while preserving the existing site.
-- Do not add server-only features: API routes, route handlers, Server Actions, middleware requiring a server, runtime SSR, or server-side database access.
+- Do not add a separately hosted backend: API routes, route handlers, Server Actions, middleware requiring a server, runtime SSR, or server-side database access. Supabase-managed services and SQL RPC functions are allowed.
 - Use browser APIs only in client components and after the component mounts where necessary.
-- Do not assume a Google Meet URL reveals whether a meeting is live or who joined. Current meeting status is user-managed. Do not claim real-time Meet integration exists.
+- Do not assume a destination URL reveals whether it is active or who is using it. Link locks represent claims made through this app, not verified usage at the destination.
 
 ## Data and behavior
 
-- Meeting data is stored locally in the browser using Local Storage.
-- Keep the existing storage key compatible unless a deliberate migration is implemented.
-- Export must produce a portable JSON backup with a schema identifier and version.
-- Import must validate the file and its records before changing state.
-- Import must clearly confirm before replacing the current list.
-- Do not silently discard existing records, merge unexpectedly, or execute imported content.
-- Treat imported JSON as untrusted data. Validate types, status values, URLs, and identifiers.
-- Local Storage is per browser/profile/device; it is not cloud sync or an account backup.
+- Shared group, member, invitation, link, lock, and usage-history data is stored in Supabase PostgreSQL.
+- Use Supabase Auth for user identity; never trust a user ID supplied by the browser without checking auth.uid() in database functions and RLS.
+- Every exposed table must have RLS enabled and explicit policies. Never expose a Supabase Secret/Service Role key in client code.
+- Group owners create groups, manage links, invite by email, and approve/reject join requests. Members may claim and release links.
+- Invitations are in-app email allow-list invitations. Without a trusted server/Edge Function, do not claim that the app sends invitation emails.
+- Use PostgreSQL RPC functions for membership approval, invitation acceptance, and link claim/release operations.
+- Link claim must remain atomic and enforce one active holder per link. Do not replace the unique lock constraint with a client-side check.
+- A lock expires after 30 minutes; the UI refreshes stale lock state. Keep the timeout and database function behavior consistent.
+- A URL already copied outside the app cannot be blocked by this app; describe the guarantee as exclusive link claiming through the app, not access control at the destination.
 
 ## UI, typography, icons, and code conventions
 
@@ -79,5 +81,5 @@ The production build must complete successfully and generate the static `out/` d
 - Review the diff; ensure no unrelated files or root homepage files changed.
 - Run `npm run build`.
 - Check that static export succeeds with the configured base path.
-- Confirm Export and Import still work, including invalid JSON and invalid record cases.
+- Verify auth, group creation, invitation acceptance, join-request approval, RLS, atomic claim/release, expiry, and realtime updates.
 - Report what changed, tests/build results, and any deployment setting the user must configure. Never claim deployment succeeded until the GitHub Actions run confirms it.
