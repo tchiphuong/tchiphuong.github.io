@@ -157,7 +157,7 @@ export default function HomePage() {
   }, [user]);
 
   useEffect(() => {
-    const isDetail = window.location.pathname.replace(/\\/+$/, "").endsWith("/room");
+    const isDetail = window.location.pathname.endsWith("/room/") || window.location.pathname.endsWith("/room");
     const params = new URLSearchParams(window.location.search);
     setIsRoomPage(isDetail);
     setRequestedRoomId(params.get("id"));
