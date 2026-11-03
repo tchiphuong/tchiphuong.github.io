@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101827" />
+    <meta name="description" content="Meet Manager - quản lý liên kết Google Meet." />
+    <title>Meet Manager</title>
+    <style>
+      :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e8edf5;background:#0b1120;font-synthesis:none;text-rendering:optimizeLegibility}
+      *{box-sizing:border-box}body{margin:0;min-width:320px;background:radial-gradient(ellipse at 80% -15%,#1e3a5f 0,transparent 42%),#0b1120}
+      button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;margin:auto;padding:36px 24px 64px}
+      .top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:36px}.brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,#4f8cff,#7357e8);display:grid;place-items:center;font-size:21px;box-shadow:0 8px 28px #477eff40}.brand strong{display:block;font-size:17px;letter-spacing:.2px}.brand small{display:block;color:#8b9ab1;margin-top:3px}
+      .pill{border:1px solid #26354b;background:#121d2e;color:#a8bad2;border-radius:999px;padding:8px 12px;font-size:12px}
+      .hero{margin-bottom:26px}.eyebrow{color:#78a9ff;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase}.hero h1{font-size:clamp(30px,5vw,44px);letter-spacing:-1.6px;margin:10px 0 8px}.hero p{color:#9aa9bd;margin:0;line-height:1.6}
+      .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:28px 0}.stat,.panel{border:1px solid #223149;background:#111b2b;border-radius:18px}.stat{padding:18px 20px}.stat span{color:#8fa0b8;font-size:13px}.stat strong{display:block;font-size:27px;margin-top:8px}
+      .layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:18px;align-items:start}.panel{padding:22px}.panel h2{font-size:16px;margin:0 0 18px}.field{display:block;margin-bottom:14px}.field span{display:block;color:#9aa9bd;font-size:12px;margin-bottom:7px}.field input,.field select{width:100%;border:1px solid #2a3a52;border-radius:10px;background:#0c1524;color:#e8edf5;padding:11px 12px;outline:none}.field input:focus,.field select:focus{border-color:#6498ff;box-shadow:0 0 0 3px #6498ff20}.primary{width:100%;border:0;border-radius:10px;background:#3979ed;color:white;font-weight:650;padding:12px}.primary:hover{background:#4a88fa}.muted{color:#8495ad;font-size:12px;line-height:1.6;margin:12px 0 0}
+      .list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.list-head h2{margin:0}.search{max-width:230px;width:100%;border:1px solid #2a3a52;border-radius:10px;background:#0c1524;color:#e8edf5;padding:9px 11px}
+      .empty{padding:42px 16px;text-align:center;color:#899ab1;border:1px dashed #2a3a52;border-radius:14px}.empty b{display:block;color:#dce5f2;margin-bottom:6px}.meeting{padding:16px;border:1px solid #26364e;background:#0d1727;border-radius:14px;margin-top:11px}.meeting-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.meeting h3{font-size:14px;margin:0 0 6px;overflow-wrap:anywhere}.meeting a{color:#7eacff;font-size:12px;text-decoration:none}.meeting a:hover{text-decoration:underline}.status{font-size:11px;padding:5px 8px;border-radius:999px;white-space:nowrap}.status.scheduled{background:#24344c;color:#a9c9ff}.status.live{background:#123c32;color:#6de0b4}.status.ended{background:#34313d;color:#b5a9c6}.meeting-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px}.meeting-foot select{background:#111d30;color:#b9c8dc;border:1px solid #2a3a52;border-radius:8px;padding:7px;font-size:12px}.delete{border:0;background:transparent;color:#f18c94;font-size:12px;padding:7px}.empty-note{font-size:12px;color:#788ba5;margin-top:16px}
+      footer{text-align:center;color:#65758d;font-size:12px;margin-top:30px}
+      @media(max-width:800px){.layout{grid-template-columns:1fr}.stats{gap:9px}.stat{padding:15px}.stat strong{font-size:23px}}@media(max-width:480px){.shell{padding:24px 15px 48px}.top{margin-bottom:28px}.stats{grid-template-columns:1fr}.list-head{align-items:stretch;flex-direction:column}.search{max-width:none}}
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React, {useEffect, useMemo, useState} from "https://esm.sh/react@19.1.0";
+      import {createRoot} from "https://esm.sh/react-dom@19.1.0/client";
+      const h = React.createElement;
+      const KEY = "meet-manager-items-v1";
+      const labels = {scheduled:"Đã lên lịch",live:"Đang họp",ended:"Đã kết thúc"};
+      function App(){
+        const [items,setItems] = useState(()=>{try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch{return[]}});
+        const [title,setTitle] = useState(""); const [url,setUrl] = useState(""); const [status,setStatus] = useState("scheduled"); const [query,setQuery] = useState("");
+        useEffect(()=>{localStorage.setItem(KEY,JSON.stringify(items))},[items]);
+        const filtered = useMemo(()=>items.filter(x=>(x.title+" "+x.url).toLowerCase().includes(query.toLowerCase())),[items,query]);
+        const add = e => {e.preventDefault();const clean=url.trim();try{const parsed=new URL(clean);if(!["https:","http:"].includes(parsed.protocol))return alert("URL không hợp lệ.");}catch{return alert("Vui lòng nhập URL Google Meet hợp lệ.");}
+          setItems(old=>[{id:crypto.randomUUID(),title:title.trim()||"Cuộc họp mới",url:clean,status,createdAt:new Date().toISOString()},...old]);setTitle("");setUrl("");setStatus("scheduled");};
+        const changeStatus=(id,next)=>setItems(old=>old.map(x=>x.id===id?{...x,status:next}:x));
+        const remove=id=>{if(confirm("Xóa cuộc họp này khỏi danh sách?"))setItems(old=>old.filter(x=>x.id!==id))};
+        const count=s=>items.filter(x=>x.status===s).length;
+        return h("main",{className:"shell"},
+          h("header",{className:"top"},h("div",{className:"brand"},h("div",{className:"logo"},"◉"),h("div",null,h("strong",null,"Meet Manager"),h("small",null,"Personal meeting workspace"))),h("span",{className:"pill"},"REACT JS · BETA")),
+          h("section",{className:"hero"},h("div",{className:"eyebrow"},"WORKSPACE"),h("h1",null,"Quản lý cuộc họp"),h("p",null,"Tập trung các liên kết Google Meet của mày tại một nơi. Nhanh, gọn và dễ theo dõi.")),
+          h("section",{className:"stats"},h("div",{className:"stat"},h("span",null,"Tổng cuộc họp"),h("strong",null,items.length)),h("div",{className:"stat"},h("span",null,"Đang họp"),h("strong",null,count("live"))),h("div",{className:"stat"},h("span",null,"Đã lên lịch"),h("strong",null,count("scheduled")))),
+          h("section",{className:"layout"},
+            h("form",{className:"panel",onSubmit:add},h("h2",null,"Thêm cuộc họp"),h("label",{className:"field"},h("span",null,"Tên cuộc họp"),h("input",{value:title,onChange:e=>setTitle(e.target.value),placeholder:"Ví dụ: Daily meeting"})),h("label",{className:"field"},h("span",null,"Google Meet URL"),h("input",{type:"url",required:true,value:url,onChange:e=>setUrl(e.target.value),placeholder:"https://meet.google.com/xxx-yyyy-zzz"})),h("label",{className:"field"},h("span",null,"Trạng thái ban đầu"),h("select",{value:status,onChange:e=>setStatus(e.target.value)},Object.entries(labels).map(([v,l])=>h("option",{key:v,value:v},l)))),h("button",{className:"primary",type:"submit"},"＋ Thêm cuộc họp"),h("p",{className:"muted"},"Dữ liệu được lưu trên trình duyệt hiện tại bằng Local Storage. Chưa đồng bộ giữa các thiết bị.")),
+            h("section",{className:"panel"},h("div",{className:"list-head"},h("h2",null,"Danh sách cuộc họp"),h("input",{className:"search",value:query,onChange:e=>setQuery(e.target.value),placeholder:"Tìm cuộc họp..."})),
+              filtered.length===0?h("div",{className:"empty"},h("b",null,items.length?"Không tìm thấy cuộc họp":"Chưa có cuộc họp nào"),items.length?"Thử từ khóa khác nhé.":"Thêm liên kết Google Meet đầu tiên ở khung bên trái."):
+              filtered.map(item=>h("article",{className:"meeting",key:item.id},h("div",{className:"meeting-top"},h("div",null,h("h3",null,item.title),h("a",{href:item.url,target:"_blank",rel:"noreferrer"},item.url)),h("span",{className:"status "+item.status},labels[item.status])),h("div",{className:"meeting-foot"},h("select",{value:item.status,onChange:e=>changeStatus(item.id,e.target.value),"aria-label":"Cập nhật trạng thái"},Object.entries(labels).map(([v,l])=>h("option",{key:v,value:v},l))),h("button",{className:"delete",onClick:()=>remove(item.id)},"Xóa"))))
+            )
+          ),
+          h("footer",null,"Meet Manager · Bản frontend thử nghiệm · Trạng thái hiện được cập nhật thủ công")
+        );
+      }
+      createRoot(document.getElementById("root")).render(h(App));
+    </script>
+  </body>
+</html>
