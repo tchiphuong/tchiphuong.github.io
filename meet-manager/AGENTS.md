@@ -41,7 +41,8 @@ This file is the shared source of truth for AI coding agents working in this dir
 
 ## UI and code conventions
 
-- Use HeroUI v3 components and APIs, not legacy v2 patterns.
+- Use HeroUI v3 components and APIs for every user-facing UI control and display component; do not introduce native buttons, inputs, selects, links, or custom-styled substitutes.
+- Native semantic elements such as `main`, `header`, `section`, `form`, `footer`, and layout wrappers may be used for document structure. Keep them minimal and use HeroUI components for the actual interface.
 - Prefer the existing visual language: dark interface, restrained blue accents, responsive layout, clear spacing, accessible labels, and visible feedback.
 - Keep components small and readable. Avoid unnecessary dependencies and over-engineering.
 - Use semantic HTML, accessible names, keyboard-operable controls, and appropriate button types.
