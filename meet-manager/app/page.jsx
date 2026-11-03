@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
-import { Alert, Button, Card, Chip, Input, Separator } from "@heroui/react";
+import { Alert, AlertDialog, Button, Card, Chip, Input, Link as HeroLink, Separator } from "@heroui/react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const ERROR_TEXT = {
@@ -64,6 +64,7 @@ export default function HomePage() {
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const user = session?.user ?? null;
   const isOwner = selectedGroup?.owner_id === user?.id;
@@ -204,7 +205,11 @@ export default function HomePage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "links", filter: `group_id=eq.${selectedGroup.id}` }, () => refreshGroup(selectedGroup))
       .on("postgres_changes", { event: "*", schema: "public", table: "group_join_requests", filter: `group_id=eq.${selectedGroup.id}` }, () => refreshGroup(selectedGroup))
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const intervalId = window.setInterval(() => refreshGroup(selectedGroup), 15000);
+    return () => {
+      window.clearInterval(intervalId);
+      supabase.removeChannel(channel);
+    };
   }, [user, selectedGroup, refreshGroup]);
 
   const visibleLinks = useMemo(() => {
@@ -299,13 +304,21 @@ export default function HomePage() {
     }, "Đã tạo lời mời. Thành viên đăng nhập bằng email được mời để chấp nhận.");
   }
 
-  async function claimLink(linkId) {
+  async function claimLink(link) {
+    const popup = window.open("about:blank", "_blank");
     await runAction(async () => {
-      const { error } = await supabase.rpc("claim_link", { p_link_id: linkId });
+      const { error } = await supabase.rpc("claim_link", { p_link_id: link.id });
       if (error) throw error;
-      const { data } = await supabase.from("links").select("url").eq("id", linkId).single();
-      if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
+      if (popup) {
+        popup.opener = null;
+        popup.location.href = link.url;
+      } else {
+        setNotice({ type: "success", message: "Đã giữ link trong 30 phút. Trình duyệt đã chặn tab mới; hãy mở link bằng nút bên dưới." });
+      }
     }, "Đã giữ link trong 30 phút.");
+    if (popup && !locks.some((item) => item.link_id === link.id)) {
+      // Keep the reserved tab open only after the database confirms the lock.
+    }
   }
 
   async function releaseLink(linkId) {
@@ -339,8 +352,10 @@ export default function HomePage() {
     }, "Đã tham gia nhóm.");
   }
 
-  async function deleteLink(linkId) {
-    if (!window.confirm("Xóa link này khỏi nhóm?")) return;
+  async function confirmDeleteLink() {
+    if (!deleteTarget) return;
+    const linkId = deleteTarget.id;
+    setDeleteTarget(null);
     await runAction(async () => {
       const { error } = await supabase.from("links").delete().eq("id", linkId);
       if (error) throw error;
@@ -392,7 +407,7 @@ export default function HomePage() {
               {authMode === "signup" && <Field label="Tên hiển thị" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Tên của mày" required />}
               <Field label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required />
               <Field label="Mật khẩu" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Ít nhất 6 ký tự" required />
-              <Button type="submit" fullWidth isPending={busy}>{authMode === "signin" ? "Đăng nhập" : "Đăng ký"}</Button>
+              <Button type="submit" fullWidth isDisabled={busy}>{authMode === "signin" ? "Đăng nhập" : "Đăng ký"}</Button>
             </form>
             <Separator className="my-5" />
             <Button variant="tertiary" fullWidth onPress={() => setAuthMode(authMode === "signin" ? "signup" : "signin")}>
@@ -449,7 +464,7 @@ export default function HomePage() {
           <Card.Content className="p-5 pt-3">
             <form className="flex gap-2" onSubmit={createGroup}>
               <Input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="Tên nhóm" variant="secondary" fullWidth />
-              <Button type="submit" isPending={busy} isDisabled={!newGroupName.trim()}><Icon icon="gravity-ui:plus" /> Tạo</Button>
+              <Button type="submit" isDisabled={busy} isDisabled={!newGroupName.trim()}><Icon icon="gravity-ui:plus" /> Tạo</Button>
             </form>
           </Card.Content>
         </Card>
@@ -465,7 +480,7 @@ export default function HomePage() {
             {invitations.map((invitation) => (
               <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm">{invitation.groups?.name || "Nhóm"} · {invitation.email}</p>
-                <Button size="sm" onPress={() => acceptInvitation(invitation.id)} isPending={busy}>Chấp nhận lời mời</Button>
+                <Button size="sm" onPress={() => acceptInvitation(invitation.id)} isDisabled={busy}>Chấp nhận lời mời</Button>
               </div>
             ))}
           </Card.Content>
@@ -523,7 +538,7 @@ export default function HomePage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <h3 className="font-medium">{link.title}</h3>
-                          <a className="mt-1 block break-all text-sm text-accent underline-offset-4 hover:underline" href={link.url} target="_blank" rel="noreferrer">{link.url}</a>
+                          <HeroLink className="mt-1 block break-all text-sm text-accent" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</HeroLink>
                         </div>
                         <Chip color={lock ? (mine ? "success" : "warning") : "success"} variant="soft" size="sm">
                           {lock ? (mine ? "Mày đang giữ" : "Đang được sử dụng") : "Đang trống"}
@@ -536,9 +551,9 @@ export default function HomePage() {
                         </p>
                       )}
                       <div className="flex flex-wrap gap-2">
-                        {!lock && <Button size="sm" onPress={() => claimLink(link.id)} isPending={busy}><Icon icon="gravity-ui:hand" /> Giữ link & mở</Button>}
-                        {mine && <Button size="sm" variant="secondary" onPress={() => releaseLink(link.id)} isPending={busy}><Icon icon="gravity-ui:unlock" /> Trả link</Button>}
-                        {isOwner && <Button size="sm" variant="danger" onPress={() => deleteLink(link.id)} isPending={busy}><Icon icon="gravity-ui:trash-bin" /> Xóa</Button>}
+                        {!lock && <Button size="sm" onPress={() => claimLink(link)} isDisabled={busy}><Icon icon="gravity-ui:hand" /> Giữ link & mở</Button>}
+                        {mine && <Button size="sm" variant="secondary" onPress={() => releaseLink(link.id)} isDisabled={busy}><Icon icon="gravity-ui:unlock" /> Trả link</Button>}
+                        {isOwner && <Button size="sm" variant="danger" onPress={() => setDeleteTarget(link)} isDisabled={busy}><Icon icon="gravity-ui:trash-bin" /> Xóa</Button>}
                       </div>
                     </Card.Content>
                   </Card>
@@ -560,7 +575,7 @@ export default function HomePage() {
                     <form className="flex flex-col gap-3" onSubmit={addLink}>
                       <Field label="Tên link" value={newLinkTitle} onChange={(event) => setNewLinkTitle(event.target.value)} placeholder="Production server" required />
                       <Field label="URL" type="url" value={newLinkUrl} onChange={(event) => setNewLinkUrl(event.target.value)} placeholder="https://..." required />
-                      <Button type="submit" fullWidth isPending={busy}><Icon icon="gravity-ui:plus" /> Thêm link</Button>
+                      <Button type="submit" fullWidth isDisabled={busy}><Icon icon="gravity-ui:plus" /> Thêm link</Button>
                     </form>
                   </Card.Content>
                 </Card>
@@ -573,7 +588,7 @@ export default function HomePage() {
                   <Card.Content className="p-5 pt-3">
                     <form className="flex gap-2" onSubmit={sendInvitation}>
                       <Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="member@example.com" variant="secondary" fullWidth required />
-                      <Button type="submit" isPending={busy} isDisabled={!inviteEmail.trim()}>Mời</Button>
+                      <Button type="submit" isDisabled={busy} isDisabled={!inviteEmail.trim()}>Mời</Button>
                     </form>
                   </Card.Content>
                 </Card>
@@ -588,8 +603,8 @@ export default function HomePage() {
                       <div key={request.id} className="space-y-2">
                         <p className="break-all text-sm">{request.profile?.display_name || request.profile?.email || request.user_id}</p>
                         <div className="flex gap-2">
-                          <Button size="sm" onPress={() => reviewRequest(request.id, true)} isPending={busy}>Duyệt</Button>
-                          <Button size="sm" variant="outline" onPress={() => reviewRequest(request.id, false)} isPending={busy}>Từ chối</Button>
+                          <Button size="sm" onPress={() => reviewRequest(request.id, true)} isDisabled={busy}>Duyệt</Button>
+                          <Button size="sm" variant="outline" onPress={() => reviewRequest(request.id, false)} isDisabled={busy}>Từ chối</Button>
                         </div>
                       </div>
                     ))}
@@ -642,6 +657,29 @@ export default function HomePage() {
           </Card.Content>
         </Card>
       )}
+
+      <AlertDialog>
+        <AlertDialog.Backdrop
+          isOpen={Boolean(deleteTarget)}
+          onOpenChange={(isOpen) => { if (!isOpen) setDeleteTarget(null); }}
+          variant="blur"
+          isDismissable
+        >
+          <AlertDialog.Container placement="center" size="sm">
+            <AlertDialog.Dialog>
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Xóa link?</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body>Link "{deleteTarget?.title}" sẽ bị xóa khỏi nhóm cùng lịch sử sử dụng.</AlertDialog.Body>
+              <AlertDialog.Footer>
+                <Button variant="tertiary" onPress={() => setDeleteTarget(null)}>Hủy</Button>
+                <Button variant="danger" onPress={confirmDeleteLink} isDisabled={busy}>Xóa link</Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
 
       <footer className="py-10 text-center text-xs text-muted">
         Shared Link Manager · Supabase Auth, PostgreSQL & Realtime · Link lock expires after 30 minutes
