@@ -81,7 +81,7 @@ export default function HomePage() {
     }
 
     const [membershipResult, invitationResult, requestResult] = await Promise.all([
-      supabase.from("group_members").select("group_id, role, groups(id, name, owner_id, is_discoverable)").eq("user_id", currentUser.id),
+      supabase.from("group_members").select("group_id, role, groups(id, name, owner_id)").eq("user_id", currentUser.id),
       supabase.from("group_invitations").select("id, group_id, email, invite_token, status, groups(name)").in("status", ["pending", "requested"]).ilike("email", currentUser.email || ""),
       supabase.from("group_join_requests").select("id, group_id, status, requested_at, groups(name)").eq("user_id", currentUser.id).eq("status", "pending"),
     ]);
@@ -498,7 +498,7 @@ export default function HomePage() {
           <Card.Content className="p-5 pt-3">
             <form className="flex gap-2" onSubmit={createGroup}>
               <Input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="Tên nhóm" variant="secondary" fullWidth />
-              <Button type="submit" isDisabled={busy} isDisabled={!newGroupName.trim()}><Icon icon="gravity-ui:plus" /> Tạo</Button>
+              <Button type="submit" isDisabled={busy || !newGroupName.trim()}><Icon icon="gravity-ui:plus" /> Tạo</Button>
             </form>
           </Card.Content>
         </Card>
@@ -522,26 +522,6 @@ export default function HomePage() {
         </Card>
       )}
 
-      <Card className="mb-8">
-        <Card.Header className="px-5 pt-5">
-          <Card.Title>Tìm nhóm để tham gia</Card.Title>
-          <Card.Description>Gửi yêu cầu và chỉ trở thành thành viên sau khi Owner phê duyệt.</Card.Description>
-        </Card.Header>
-        <Card.Content className="space-y-3 p-5 pt-3">
-          {discoverableGroups.filter((group) => !groups.some((memberGroup) => memberGroup.id === group.id)).map((group) => {
-            const pending = myRequests.some((request) => request.group_id === group.id);
-            return (
-              <div key={group.id} className="flex flex-wrap items-center justify-between gap-3">
-                <p className="font-medium">{group.name}</p>
-                <Button size="sm" variant="outline" isDisabled={pending || busy} onPress={() => requestJoin(group.id)}>
-                  {pending ? "Đã gửi yêu cầu" : "Xin tham gia"}
-                </Button>
-              </div>
-            );
-          })}
-          {!discoverableGroups.some((group) => !groups.some((memberGroup) => memberGroup.id === group.id)) && <p className="text-sm text-muted">Hiện không có nhóm công khai nào khác.</p>}
-        </Card.Content>
-      </Card>
 
       {selectedGroup ? (
         <section className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
