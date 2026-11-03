@@ -106,19 +106,73 @@ create trigger on_auth_user_created_profile
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+insert into public.profiles (id, email, display_name)
+select id, coalesce(email, ''), coalesce(raw_user_meta_data ->> 'display_name', '')
+from auth.users
+on conflict (id) do update set email = excluded.email;
+
 create or replace function public.set_group_owner()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $$
+as $
 begin
   insert into public.group_members (group_id, user_id, role)
   values (new.id, new.owner_id, 'owner')
   on conflict (group_id, user_id) do nothing;
   return new;
 end;
-$$;
+$;
+
+-- SECURITY DEFINER helpers avoid recursive RLS evaluation between membership policies.
+create or replace function public.is_group_member(p_group_id uuid, p_user_id uuid default auth.uid())
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1 from public.group_members gm
+    where gm.group_id = p_group_id and gm.user_id = p_user_id
+  );
+$;
+
+create or replace function public.is_group_owner(p_group_id uuid, p_user_id uuid default auth.uid())
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1 from public.groups g
+    where g.id = p_group_id and g.owner_id = p_user_id
+  );
+$;
+
+create or replace function public.is_group_peer(p_profile_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.group_members mine
+    join public.group_members theirs on theirs.group_id = mine.group_id
+    where mine.user_id = auth.uid() and theirs.user_id = p_profile_id
+  );
+$;
+
+revoke all on function public.is_group_member(uuid, uuid) from public;
+revoke all on function public.is_group_owner(uuid, uuid) from public;
+revoke all on function public.is_group_peer(uuid) from public;
+grant execute on function public.is_group_member(uuid, uuid) to authenticated;
+grant execute on function public.is_group_owner(uuid, uuid) to authenticated;
+grant execute on function public.is_group_peer(uuid) to authenticated;
 
 drop trigger if exists on_group_created_add_owner on public.groups;
 create trigger on_group_created_add_owner
@@ -296,14 +350,7 @@ alter table public.link_usage_history enable row level security;
 drop policy if exists "Profiles visible to self and group peers" on public.profiles;
 create policy "Profiles visible to self and group peers" on public.profiles
 for select to authenticated
-using (
-  id = (select auth.uid())
-  or exists (
-    select 1 from public.group_members mine
-    join public.group_members theirs on theirs.group_id = mine.group_id
-    where mine.user_id = (select auth.uid()) and theirs.user_id = profiles.id
-  )
-);
+using (id = (select auth.uid()) or public.is_group_peer(id));
 
 drop policy if exists "Users update own profile" on public.profiles;
 create policy "Users update own profile" on public.profiles
@@ -314,10 +361,7 @@ with check (id = (select auth.uid()));
 drop policy if exists "Discoverable groups and member groups visible" on public.groups;
 create policy "Discoverable groups and member groups visible" on public.groups
 for select to authenticated
-using (
-  is_discoverable
-  or exists (select 1 from public.group_members m where m.group_id = groups.id and m.user_id = (select auth.uid()))
-);
+using (is_discoverable or public.is_group_member(id));
 
 drop policy if exists "Authenticated users create own groups" on public.groups;
 create policy "Authenticated users create own groups" on public.groups
@@ -333,22 +377,19 @@ with check (owner_id = (select auth.uid()));
 drop policy if exists "Members view group membership" on public.group_members;
 create policy "Members view group membership" on public.group_members
 for select to authenticated
-using (
-  exists (select 1 from public.group_members mine
-          where mine.group_id = group_members.group_id and mine.user_id = (select auth.uid()))
-);
+using (public.is_group_member(group_id));
 
 drop policy if exists "Owners manage group members" on public.group_members;
 create policy "Owners manage group members" on public.group_members
 for delete to authenticated
-using (exists (select 1 from public.groups g where g.id = group_members.group_id and g.owner_id = (select auth.uid())));
+using (public.is_group_owner(group_id));
 
 drop policy if exists "Users view own requests and owners view group requests" on public.group_join_requests;
 create policy "Users view own requests and owners view group requests" on public.group_join_requests
 for select to authenticated
 using (
   user_id = (select auth.uid())
-  or exists (select 1 from public.groups g where g.id = group_join_requests.group_id and g.owner_id = (select auth.uid()))
+  or public.is_group_owner(group_id)
 );
 
 drop policy if exists "Users create own requests for discoverable groups" on public.group_join_requests;
@@ -363,11 +404,8 @@ with check (
 drop policy if exists "Owners view and manage invitations" on public.group_invitations;
 create policy "Owners view and manage invitations" on public.group_invitations
 for all to authenticated
-using (exists (select 1 from public.groups g where g.id = group_invitations.group_id and g.owner_id = (select auth.uid())))
-with check (
-  invited_by = (select auth.uid())
-  and exists (select 1 from public.groups g where g.id = group_invitations.group_id and g.owner_id = (select auth.uid()))
-);
+using (public.is_group_owner(group_id))
+with check (invited_by = (select auth.uid()) and public.is_group_owner(group_id));
 
 drop policy if exists "Invitees view invitations for their email" on public.group_invitations;
 create policy "Invitees view invitations for their email" on public.group_invitations
@@ -377,32 +415,23 @@ using (lower(email) = lower(coalesce(auth.jwt() ->> 'email', '')));
 drop policy if exists "Members view links" on public.links;
 create policy "Members view links" on public.links
 for select to authenticated
-using (exists (select 1 from public.group_members m where m.group_id = links.group_id and m.user_id = (select auth.uid())));
+using (public.is_group_member(group_id));
 
 drop policy if exists "Owners manage links" on public.links;
 create policy "Owners manage links" on public.links
 for all to authenticated
-using (exists (select 1 from public.groups g where g.id = links.group_id and g.owner_id = (select auth.uid())))
-with check (
-  created_by = (select auth.uid())
-  and exists (select 1 from public.groups g where g.id = links.group_id and g.owner_id = (select auth.uid()))
-);
+using (public.is_group_owner(group_id))
+with check (created_by = (select auth.uid()) and public.is_group_owner(group_id));
 
 drop policy if exists "Members view link locks" on public.link_locks;
 create policy "Members view link locks" on public.link_locks
 for select to authenticated
-using (exists (
-  select 1 from public.links l join public.group_members m on m.group_id = l.group_id
-  where l.id = link_locks.link_id and m.user_id = (select auth.uid())
-));
+using (exists (select 1 from public.links l where l.id = link_locks.link_id and public.is_group_member(l.group_id)));
 
 drop policy if exists "Members view usage history" on public.link_usage_history;
 create policy "Members view usage history" on public.link_usage_history
 for select to authenticated
-using (exists (
-  select 1 from public.links l join public.group_members m on m.group_id = l.group_id
-  where l.id = link_usage_history.link_id and m.user_id = (select auth.uid())
-));
+using (exists (select 1 from public.links l where l.id = link_usage_history.link_id and public.is_group_member(l.group_id)));
 
 grant usage on schema public to authenticated;
 grant select, update on public.profiles to authenticated;
