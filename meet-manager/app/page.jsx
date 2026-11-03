@@ -459,7 +459,10 @@ export default function HomePage() {
             <p className="text-xs text-muted">{user.email}</p>
           </div>
         </div>
-        <Button variant="outline" onPress={signOut}><Icon icon="gravity-ui:door-arrow-right" /> Đăng xuất</Button>
+        <div className="flex items-center gap-2">
+          {isRoomPage && <Button variant="outline" onPress={() => window.location.assign("/meet-manager/")}><Icon icon="gravity-ui:arrow-left" /> Trang chủ</Button>}
+          <Button variant="outline" onPress={signOut}><Icon icon="gravity-ui:door-arrow-right" /> Đăng xuất</Button>
+        </div>
       </header>
 
       <section className="mb-8 max-w-3xl">
