@@ -6,7 +6,8 @@ This file is the shared source of truth for AI coding agents working in this dir
 
 - Product: Meet Manager, a client-side Google Meet link organizer.
 - Framework: Next.js App Router with React 19.
-- UI: HeroUI v3 and Tailwind CSS v4.
+- UI: HeroUI v3, Tailwind CSS v4, and Iconify using the Gravity UI icon set.
+- Typography: Inter, loaded globally from Google Fonts.
 - Language: JavaScript / JSX.
 - Hosting: GitHub Pages using Next.js static export.
 - Public URL: https://tchiphuong.github.io/meet-manager/
@@ -18,6 +19,7 @@ This file is the shared source of truth for AI coding agents working in this dir
 2. Inspect the relevant files in `app/`, `package.json`, and `next.config.mjs`.
 3. Check the current Git diff and preserve unrelated user changes.
 4. Verify the installed HeroUI v3 API before introducing or changing component props. Do not copy HeroUI v2 examples into this project.
+5. Verify icon names against the Gravity UI icon set; do not guess icon identifiers.
 
 ## Architecture and deployment constraints
 
@@ -39,16 +41,26 @@ This file is the shared source of truth for AI coding agents working in this dir
 - Treat imported JSON as untrusted data. Validate types, status values, URLs, and identifiers.
 - Local Storage is per browser/profile/device; it is not cloud sync or an account backup.
 
-## UI and code conventions
+## UI, typography, icons, and code conventions
 
-- Use HeroUI v3 components and APIs for every user-facing UI control and display component; do not introduce native buttons, inputs, selects, links, or custom-styled substitutes.
-- Native semantic elements such as `main`, `header`, `section`, `form`, `footer`, and layout wrappers may be used for document structure. Keep them minimal and use HeroUI components for the actual interface.
-- Prefer the existing visual language: dark interface, restrained blue accents, responsive layout, clear spacing, accessible labels, and visible feedback.
+- Use HeroUI v3 components and APIs for every user-facing UI control and display component. Do not introduce native buttons, inputs, selects, links, or custom-styled substitutes.
+- Native semantic elements such as `main`, `header`, `section`, `form`, `footer`, and layout wrappers may be used for document structure only. Keep markup minimal.
+- Use HeroUI compound component patterns and v3 APIs; never use legacy HeroUI v2 patterns.
+- Use `Icon` from `@iconify/react` for icons, with the `gravity-ui:` icon collection. Do not add Lucide, Font Awesome, emoji, or hand-written Unicode symbols as UI icons.
+- Use icons consistently for meaningful actions and external links. Avoid decorative icons that add no information. Icon-only controls must have an accessible name.
+- Use Inter as the global font. Keep the font declaration centralized in `app/globals.css`; do not introduce competing font families or per-component font overrides.
+- Keep the visual design clean and restrained: dark theme, blue accent, consistent spacing, responsive layout, and clear visual hierarchy.
+- Remove redundant labels, badges, decorative elements, duplicate information, and unnecessary wrappers. Prefer the simplest UI that preserves usability.
 - Keep components small and readable. Avoid unnecessary dependencies and over-engineering.
 - Use semantic HTML, accessible names, keyboard-operable controls, and appropriate button types.
 - Keep user-facing text in Vietnamese unless a screen already uses a deliberate English label.
-- Avoid `any`-style unvalidated data assumptions, unsafe HTML injection, and hard-coded secrets.
+- Avoid unvalidated data assumptions, unsafe HTML injection, and hard-coded secrets.
 - Preserve existing features unless the task explicitly asks to remove them.
+
+## Project instruction files
+
+- Keep the agent instruction filenames uppercase: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
+- Keep project-wide conventions in this `AGENTS.md`; tool-specific files should refer to it rather than contradict it.
 
 ## Commands
 
