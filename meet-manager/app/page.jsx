@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  AlertDialog,
   Button,
   Card,
   Chip,
@@ -75,6 +76,7 @@ export default function HomePage() {
   const [status, setStatus] = useState("scheduled");
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState(null);
+  const [confirmation, setConfirmation] = useState(null);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -132,11 +134,20 @@ export default function HomePage() {
     showNotice("Đã cập nhật trạng thái.", "success");
   }
 
-  function deleteMeeting(id) {
-    if (!window.confirm("Xóa cuộc họp này?")) return;
+  function requestDeleteMeeting(id) {
+    const meeting = meetings.find((item) => item.id === id);
+    if (!meeting) return;
 
-    setMeetings((current) => current.filter((item) => item.id !== id));
-    showNotice("Đã xóa cuộc họp.", "success");
+    setConfirmation({
+      title: "Xóa cuộc họp?",
+      description: `Cuộc họp "${meeting.title}" sẽ bị xóa khỏi danh sách trên trình duyệt này.`,
+      actionLabel: "Xóa cuộc họp",
+      status: "danger",
+      onConfirm: () => {
+        setMeetings((current) => current.filter((item) => item.id !== id));
+        showNotice("Đã xóa cuộc họp.", "success");
+      },
+    });
   }
 
   function exportConfig() {
@@ -178,8 +189,6 @@ export default function HomePage() {
         throw new Error("File không đúng định dạng Meet Manager hoặc chứa dữ liệu không hợp lệ.");
       }
 
-      if (!window.confirm(`Import ${imported.length} cuộc họp và thay thế toàn bộ danh sách hiện tại?`)) return;
-
       const ids = new Set();
       const normalized = imported.map((item) => {
         let id = item.id;
@@ -188,8 +197,16 @@ export default function HomePage() {
         return { ...item, id };
       });
 
-      setMeetings(normalized);
-      showNotice(`Import thành công ${normalized.length} cuộc họp.`, "success");
+      setConfirmation({
+        title: "Import cấu hình?",
+        description: `File có ${normalized.length} cuộc họp. Danh sách hiện tại sẽ được thay thế hoàn toàn.`,
+        actionLabel: "Import và thay thế",
+        status: "warning",
+        onConfirm: () => {
+          setMeetings(normalized);
+          showNotice(`Import thành công ${normalized.length} cuộc họp.`, "success");
+        },
+      });
     } catch (error) {
       showNotice(error.message || "Không thể đọc file cấu hình.", "danger");
     }
@@ -378,7 +395,7 @@ export default function HomePage() {
                         onChange={(nextStatus) => updateStatus(item.id, nextStatus)}
                         label={`Trạng thái của ${item.title}`}
                       />
-                      <Button size="sm" variant="danger" onPress={() => deleteMeeting(item.id)}>
+                      <Button size="sm" variant="danger" onPress={() => requestDeleteMeeting(item.id)}>
                         Xóa
                       </Button>
                     </div>
@@ -389,6 +406,41 @@ export default function HomePage() {
           </Card.Content>
         </Card>
       </section>
+
+      <AlertDialog>
+        <AlertDialog.Backdrop
+          isOpen={Boolean(confirmation)}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setConfirmation(null);
+          }}
+          variant="blur"
+          isDismissable
+        >
+          <AlertDialog.Container placement="center" size="sm">
+            <AlertDialog.Dialog>
+              <AlertDialog.Header>
+                <AlertDialog.Icon status={confirmation?.status ?? "warning"} />
+                <AlertDialog.Heading>{confirmation?.title ?? "Xác nhận thao tác"}</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body>{confirmation?.description}</AlertDialog.Body>
+              <AlertDialog.Footer>
+                <Button variant="tertiary" slot="close" onPress={() => setConfirmation(null)}>
+                  Hủy
+                </Button>
+                <Button
+                  variant={confirmation?.status === "danger" ? "danger" : "primary"}
+                  onPress={() => {
+                    confirmation?.onConfirm?.();
+                    setConfirmation(null);
+                  }}
+                >
+                  {confirmation?.actionLabel ?? "Xác nhận"}
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
 
       <footer className="py-10 text-center text-xs text-muted">
         Meet Manager · Static frontend · Trạng thái cuộc họp được cập nhật thủ công
