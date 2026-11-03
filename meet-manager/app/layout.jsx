@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Meet Manager",
-  description: "Quản lý liên kết Google Meet.",
+  title: "Shared Link Manager",
+  description: "Quản lý link dùng chung theo nhóm với cơ chế khóa đồng thời.",
 };
 
 export default function RootLayout({ children }) {
