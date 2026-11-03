@@ -1,6 +1,8 @@
 -- Private rooms use one owner-defined join code. No public discovery or approval workflow.
 create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
+-- Ensure pgcrypto is in the schema used by the room-code functions, even if it existed in public.
+alter extension pgcrypto set schema extensions;
 
 alter table public.groups
   add column if not exists join_code_hash text;
