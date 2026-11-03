@@ -262,11 +262,12 @@ export default function HomePage() {
           <Button variant="secondary" onPress={() => fileRef.current?.click()}>
             Import JSON
           </Button>
-          <input
+          <Input
             ref={fileRef}
             type="file"
             accept=".json,application/json"
             className="hidden"
+            aria-label="Chọn file cấu hình JSON"
             onChange={importConfig}
           />
         </div>
@@ -371,20 +372,20 @@ export default function HomePage() {
                             {item.url}
                           </Link>
                         </div>
-                      <Chip color={STATUS[item.status].color} variant="soft" size="sm">
-                        {STATUS[item.status].label}
-                      </Chip>
-                    </div>
+                        <Chip color={STATUS[item.status].color} variant="soft" size="sm">
+                          {STATUS[item.status].label}
+                        </Chip>
+                      </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                      <StatusSelect
-                        value={item.status}
-                        onChange={(nextStatus) => updateStatus(item.id, nextStatus)}
-                        label={`Trạng thái của ${item.title}`}
-                      />
-                      <Button size="sm" variant="danger" onPress={() => requestDeleteMeeting(item.id)}>
-                        Xóa
-                      </Button>
+                        <StatusSelect
+                          value={item.status}
+                          onChange={(nextStatus) => updateStatus(item.id, nextStatus)}
+                          label={`Trạng thái của ${item.title}`}
+                        />
+                        <Button size="sm" variant="danger" onPress={() => requestDeleteMeeting(item.id)}>
+                          Xóa
+                        </Button>
                       </div>
                     </Card.Content>
                   </Card>
