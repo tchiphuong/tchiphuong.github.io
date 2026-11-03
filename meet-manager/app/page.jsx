@@ -40,6 +40,68 @@ function Notice({ notice }) {
   );
 }
 
+
+function UsageLineChart({ history }) {
+  const points = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() - (6 - index));
+      return date;
+    });
+    return days.map((date) => {
+      const key = date.toLocaleDateString("en-CA");
+      const count = history.filter((item) => new Date(item.claimed_at).toLocaleDateString("en-CA") === key).length;
+      return { label: date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }), count };
+    });
+  }, [history]);
+  const max = Math.max(4, ...points.map((point) => point.count));
+  const coords = points.map((point, index) => ({ x: 28 + (index * 544) / 6, y: 166 - (point.count / max) * 132, ...point }));
+  const line = coords.map((point) => point.x + "," + point.y).join(" ");
+  const total = points.reduce((sum, point) => sum + point.count, 0);
+  return (
+    <Card>
+      <Card.Header className="flex flex-row items-center justify-between px-5 pt-5">
+        <div><Card.Title>Lượt sử dụng link</Card.Title><Card.Description>7 ngày gần nhất</Card.Description></div>
+        <div className="text-right"><p className="text-2xl font-semibold tabular-nums">{total}</p><p className="text-xs text-muted">lượt sử dụng</p></div>
+      </Card.Header>
+      <Card.Content className="px-4 pb-4 pt-2">
+        <svg viewBox="0 0 600 210" role="img" aria-label="Biểu đồ lượt sử dụng link trong 7 ngày gần nhất" className="h-auto w-full overflow-visible">
+          {[0, 1, 2, 3].map((step) => {
+            const y = 166 - step * 44;
+            return <g key={step}><line x1="28" y1={y} x2="572" y2={y} stroke="currentColor" opacity=".12" strokeDasharray="4 5" /><text x="18" y={y + 4} textAnchor="end" fontSize="10" fill="currentColor" opacity=".55">{Math.round((max * step) / 3)}</text></g>;
+          })}
+          <polyline points={line} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          {coords.map((point) => <g key={point.label}><circle cx={point.x} cy={point.y} r="4.5" fill="var(--accent)" stroke="var(--background)" strokeWidth="2" /><text x={point.x} y="190" textAnchor="middle" fontSize="10" fill="currentColor" opacity=".65">{point.label}</text>{point.count > 0 && <text x={point.x} y={point.y - 12} textAnchor="middle" fontSize="11" fontWeight="600" fill="currentColor">{point.count}</text>}</g>)}
+        </svg>
+      </Card.Content>
+    </Card>
+  );
+}
+
+function ActivityTimeline({ history }) {
+  const events = history.flatMap((item) => [
+    { id: item.id + "-claimed", at: item.claimed_at, type: "claimed", item },
+    ...(item.released_at ? [{ id: item.id + "-released", at: item.released_at, type: "released", item }] : []),
+  ]).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 20);
+  return (
+    <Card>
+      <Card.Header className="px-5 pt-5"><Card.Title>Timeline hoạt động</Card.Title><Card.Description>20 sự kiện gần nhất của các thành viên</Card.Description></Card.Header>
+      <Card.Content className="p-5 pt-2">
+        {events.length ? <ol className="relative ml-2 space-y-5 border-l border-default pl-5">
+          {events.map((event) => <li key={event.id} className="relative">
+            <span className={"absolute -left-[25px] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-background " + (event.type === "claimed" ? "bg-accent" : "bg-success")} />
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+              <p className="text-sm"><span className="font-medium">{event.item.profile?.display_name || event.item.profile?.email || "Thành viên"}</span>{event.type === "claimed" ? " đã giữ link " : " đã trả link "}<span className="font-medium">{event.item.link_title || "Link đã xóa"}</span></p>
+              <time className="shrink-0 text-xs text-muted">{new Date(event.at).toLocaleString("vi-VN")}</time>
+            </div>
+          </li>)}
+        </ol> : <p className="py-6 text-center text-sm text-muted">Chưa có hoạt động nào được ghi nhận.</p>}
+      </Card.Content>
+    </Card>
+  );
+}
+
 export default function HomePage() {
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -139,7 +201,7 @@ export default function HomePage() {
         ? supabase.from("profiles").select("id, email, display_name").in("id", profileIds)
         : Promise.resolve({ data: [], error: null }),
       linkIds.length
-        ? supabase.from("link_usage_history").select("*").in("link_id", linkIds).order("claimed_at", { ascending: false }).limit(30)
+        ? supabase.from("link_usage_history").select("*").in("link_id", linkIds).order("claimed_at", { ascending: false }).limit(200)
         : Promise.resolve({ data: [], error: null }),
     ]);
 
@@ -153,7 +215,7 @@ export default function HomePage() {
     setLocks(lockRows.map((lock) => ({ ...lock, profile: profileMap.get(lock.user_id) })));
     setMembers(memberRows.map((member) => ({ ...member, profile: profileMap.get(member.user_id) })));
     setRequests((requestResult.data || []).map((request) => ({ ...request, profile: profileMap.get(request.user_id) })));
-    setLinkHistory((historyResult.data || []).map((item) => ({ ...item, profile: profileMap.get(item.user_id) })));
+    setLinkHistory((historyResult.data || []).map((item) => ({ ...item, profile: profileMap.get(item.user_id), link_title: linkRows.find((link) => link.id === item.link_id)?.title || "Link đã xóa" })));
   }, [user]);
 
   useEffect(() => {
@@ -524,7 +586,11 @@ export default function HomePage() {
 )}
 
       {isRoomPage && selectedGroup ? (
-        <section className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="space-y-5">
+          <UsageLineChart history={linkHistory} />
+          <ActivityTimeline history={linkHistory} />
+        </section>
+        <section className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
           <Card className="min-w-0">
             <Card.Header className="flex flex-col gap-3 px-5 pt-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
