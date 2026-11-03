@@ -33,12 +33,12 @@ This file is the shared source of truth for AI coding agents working in this dir
 
 ## Data and behavior
 
-- Shared group, member, invitation, link, lock, and usage-history data is stored in Supabase PostgreSQL.
+- Shared room, member, link, lock, and usage-history data is stored in Supabase PostgreSQL.
 - Use Supabase Auth for user identity; never trust a user ID supplied by the browser without checking auth.uid() in database functions and RLS.
 - Every exposed table must have RLS enabled and explicit policies. Never expose a Supabase Secret/Service Role key in client code.
-- Group owners create groups, manage links, invite by email, and approve/reject join requests. Members may claim and release links.
-- Invitations are in-app email allow-list invitations. Without a trusted server/Edge Function, do not claim that the app sends invitation emails.
-- Use PostgreSQL RPC functions for membership approval, invitation acceptance, and link claim/release operations.
+- Room owners create private rooms and manage links. Owners choose a room join code; authenticated users who enter the correct code become members immediately. Members may claim and release links.
+- Rooms must never be publicly discoverable. Store only a SHA-256 hash of the join code in `groups.join_code_hash`; never return the hash to the client.
+- Use PostgreSQL RPC functions `create_private_group` and `join_private_group` for room creation and code-based membership. Use RPC functions for link claim/release operations.
 - Link claim must remain atomic and enforce one active holder per link. Do not replace the unique lock constraint with a client-side check.
 - A lock expires after 30 minutes; the UI refreshes stale lock state. Keep the timeout and database function behavior consistent.
 - A URL already copied outside the app cannot be blocked by this app; describe the guarantee as exclusive link claiming through the app, not access control at the destination.
