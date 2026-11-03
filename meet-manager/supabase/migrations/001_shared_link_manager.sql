@@ -14,7 +14,7 @@ create table if not exists public.groups (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(trim(name)) between 2 and 80),
   owner_id uuid not null references auth.users(id) on delete restrict,
-  is_discoverable boolean not null default true,
+  is_discoverable boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -189,8 +189,8 @@ declare
   v_request_id uuid;
 begin
   if auth.uid() is null then raise exception 'Authentication required'; end if;
-  if not exists (select 1 from public.groups where id = p_group_id and is_discoverable) then
-    raise exception 'Group is not available for joining';
+  if not exists (select 1 from public.groups where id = p_group_id) then
+    raise exception 'Group is not available';
   end if;
   if exists (select 1 from public.group_members where group_id = p_group_id and user_id = auth.uid()) then
     raise exception 'You are already a member';
@@ -393,7 +393,7 @@ with check (id = (select auth.uid()));
 drop policy if exists "Discoverable groups and member groups visible" on public.groups;
 create policy "Discoverable groups and member groups visible" on public.groups
 for select to authenticated
-using (is_discoverable or public.is_group_member(id));
+using (public.is_group_member(id));
 
 drop policy if exists "Authenticated users create own groups" on public.groups;
 create policy "Authenticated users create own groups" on public.groups
@@ -427,11 +427,7 @@ using (
 drop policy if exists "Users create own requests for discoverable groups" on public.group_join_requests;
 create policy "Users create own requests for discoverable groups" on public.group_join_requests
 for insert to authenticated
-with check (
-  user_id = (select auth.uid())
-  and status = 'pending'
-  and exists (select 1 from public.groups g where g.id = group_join_requests.group_id and g.is_discoverable)
-);
+with check (false);
 
 drop policy if exists "Owners view and manage invitations" on public.group_invitations;
 create policy "Owners view and manage invitations" on public.group_invitations
