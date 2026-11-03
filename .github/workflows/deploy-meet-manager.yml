@@ -1,0 +1,61 @@
+name: Deploy website with Meet Manager
+
+on:
+  push:
+    branches: [gh-pages]
+    paths:
+      - "meet-manager/**"
+      - ".github/workflows/deploy-meet-manager.yml"
+      - "index.html"
+      - "assets/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: meet-manager/package-lock.json
+
+      - name: Build Next.js static export
+        working-directory: meet-manager
+        run: |
+          npm install
+          npm run build
+
+      - name: Prepare Pages artifact (preserve existing homepage)
+        run: |
+          mkdir -p _site
+          rsync -a --exclude='.git' --exclude='node_modules' --exclude='out' ./ _site/
+          rm -rf _site/meet-manager
+          mkdir -p _site/meet-manager
+          cp -R meet-manager/out/. _site/meet-manager/
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
