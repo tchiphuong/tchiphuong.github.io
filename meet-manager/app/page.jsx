@@ -62,6 +62,8 @@ export default function HomePage() {
   const [newGroupCode, setNewGroupCode] = useState("");
   const [joinGroupCode, setJoinGroupCode] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [isRoomPage, setIsRoomPage] = useState(false);
+  const [requestedRoomId, setRequestedRoomId] = useState(null);
   const inviteHandled = useRef(false);
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
@@ -155,6 +157,13 @@ export default function HomePage() {
   }, [user]);
 
   useEffect(() => {
+    const isDetail = window.location.pathname.replace(/\\/+$/, "").endsWith("/room");
+    const params = new URLSearchParams(window.location.search);
+    setIsRoomPage(isDetail);
+    setRequestedRoomId(params.get("id"));
+  }, []);
+
+  useEffect(() => {
     if (!isSupabaseConfigured) {
       setAuthReady(true);
       return;
@@ -207,6 +216,13 @@ export default function HomePage() {
       }
     })();
   }, [user, refreshWorkspace]);
+
+  useEffect(() => {
+    if (!isRoomPage || !requestedRoomId || !groups.length) return;
+    const room = groups.find((item) => item.id === requestedRoomId);
+    if (room) setSelectedGroup(room);
+    else setNotice({ type: "danger", message: "Room không tồn tại hoặc tài khoản chưa tham gia room này." });
+  }, [isRoomPage, requestedRoomId, groups]);
 
   useEffect(() => {
     refreshGroup(selectedGroup);
@@ -316,9 +332,8 @@ export default function HomePage() {
   async function copyInviteLink() {
     const code = inviteCode.trim();
     if (!selectedGroup || code.length < 6) return;
-    const inviteUrl = new URL(window.location.href);
-    inviteUrl.search = "";
-    inviteUrl.hash = "";
+    const inviteUrl = new URL("/meet-manager/room/", window.location.origin);
+    inviteUrl.searchParams.set("id", selectedGroup.id);
     inviteUrl.searchParams.set("join", code);
     try {
       await navigator.clipboard.writeText(inviteUrl.toString());
@@ -455,6 +470,7 @@ export default function HomePage() {
 
       <Notice notice={notice} />
 
+{!isRoomPage && (
       <section className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
         <Card>
           <Card.Header className="px-5 pt-5">
@@ -463,7 +479,7 @@ export default function HomePage() {
           </Card.Header>
           <Card.Content className="flex flex-wrap gap-2 p-5 pt-3">
             {groups.map((group) => (
-              <Button key={group.id} variant={selectedGroup?.id === group.id ? "primary" : "outline"} onPress={() => setSelectedGroup(group)}>
+              <Button key={group.id} variant="outline" onPress={() => window.location.assign(`/meet-manager/room/?id=${encodeURIComponent(group.id)}`)}>
                 {group.name}{group.role === "owner" ? " · Owner" : ""}
               </Button>
             ))}
@@ -487,6 +503,9 @@ export default function HomePage() {
       </section>
 
 
+)}
+
+{!isRoomPage && (
       <section className="mb-8 max-w-xl">
         <Card>
           <Card.Header className="px-5 pt-5"><Card.Title>Vào room</Card.Title><Card.Description>Nhập mã do Owner cung cấp để tham gia ngay.</Card.Description></Card.Header>
@@ -499,7 +518,9 @@ export default function HomePage() {
         </Card>
       </section>
 
-      {selectedGroup ? (
+)}
+
+      {isRoomPage && selectedGroup ? (
         <section className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
           <Card className="min-w-0">
             <Card.Header className="flex flex-col gap-3 px-5 pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -569,21 +590,32 @@ export default function HomePage() {
             <Card>
               <Card.Header className="px-5 pt-5">
                 <Card.Title>Chia sẻ room</Card.Title>
-                <Card.Description>Tạo link mời. Người nhận đăng nhập xong sẽ tự động vào room này.</Card.Description>
+                <Card.Description>Copy URL hiện tại để mở lại đúng room này. Muốn mời người mới, nhập mã room để tạo link tham gia.</Card.Description>
               </Card.Header>
               <Card.Content className="flex flex-col gap-3 p-5 pt-3">
+                <Button variant="outline" fullWidth onPress={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    setNotice({ type: "success", message: "Đã copy link trang room." });
+                  } catch {
+                    setNotice({ type: "danger", message: "Trình duyệt không cho phép truy cập clipboard." });
+                  }
+                }}>
+                  <Icon icon="gravity-ui:copy" /> Copy link hiện tại
+                </Button>
+                <Separator />
                 <Input
                   type="password"
                   value={inviteCode}
                   onChange={(event) => setInviteCode(event.target.value)}
-                  placeholder="Nhập mã vào room"
+                  placeholder="Mã vào room (ít nhất 6 ký tự)"
                   variant="secondary"
                   fullWidth
                 />
                 <Button fullWidth onPress={copyInviteLink} isDisabled={busy || inviteCode.trim().length < 6}>
-                  <Icon icon="gravity-ui:link" /> Copy link mời
+                  <Icon icon="gravity-ui:link" /> Copy link mời thành viên
                 </Button>
-                <p className="text-xs text-muted">Lưu ý: bất kỳ ai có link đều có thể tham gia. Chỉ chia sẻ với người mày tin tưởng.</p>
+                <p className="text-xs text-muted">Link mời cho phép người nhận tham gia room sau khi đăng nhập.</p>
               </Card.Content>
             </Card>
 
@@ -622,14 +654,15 @@ export default function HomePage() {
             </Card>
           </div>
         </section>
-      ) : (
+      ) : isRoomPage ? (
         <Card>
           <Card.Content className="p-8 text-center">
-            <p className="font-medium">Chưa có nhóm được chọn</p>
-            <p className="mt-2 text-sm text-muted">Tạo room mới hoặc nhập mã để tham gia room riêng tư.</p>
+            <p className="font-medium">Không tìm thấy room</p>
+            <p className="mt-2 text-sm text-muted">Quay lại trang chủ để chọn room hoặc tham gia bằng mã.</p>
+            <Button className="mt-4" onPress={() => window.location.assign("/meet-manager/")}>Về trang chủ</Button>
           </Card.Content>
         </Card>
-      )}
+      ) : null}
 
       <AlertDialog>
         <AlertDialog.Backdrop
