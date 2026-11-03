@@ -273,7 +273,7 @@ export default function HomePage() {
         const { error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { display_name: displayName.trim() } },
+          options: { data: { display_name: displayName.trim() }, emailRedirectTo: window.location.href },
         });
         if (error) throw error;
         setNotice({ type: "success", message: "Đã tạo tài khoản. Nếu dự án bật xác thực email, hãy xác nhận email trước khi đăng nhập." });
@@ -501,7 +501,7 @@ export default function HomePage() {
         <Card className="mb-6">
           <Card.Header className="px-5 pt-5"><Card.Title>Lời mời của mày</Card.Title><Card.Description>Mở link mời để gửi yêu cầu tham gia; Owner sẽ duyệt.</Card.Description></Card.Header>
           <Card.Content className="space-y-3 p-5 pt-3">
-            {invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm">{invitation.groups?.name || "Nhóm"} · {invitation.status === "requested" ? "Đang chờ duyệt" : "Chưa gửi yêu cầu"}</p><Button size="sm" variant="outline" onPress={() => { window.location.href = `${window.location.origin}${window.location.pathname}?invite=${invitation.invite_token}`; }}>Mở lời mời</Button></div>)}
+            {invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm">{invitation.groups?.name || "Nhóm"} · {invitation.status === "requested" ? "Đang chờ Owner duyệt" : "Chưa gửi yêu cầu"}</p>{invitation.status === "pending" && <Button size="sm" variant="outline" onPress={() => { window.location.href = `${window.location.origin}${window.location.pathname}?invite=${invitation.invite_token}`; }}>Mở lời mời</Button>}</div>)}
           </Card.Content>
         </Card>
       )}
