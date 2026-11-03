@@ -231,7 +231,7 @@ export default function HomePage() {
   }, [user, selectedGroup, refreshGroup]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!isSupabaseConfigured || typeof window === "undefined") return;
     const token = new URLSearchParams(window.location.search).get("invite");
     if (!token) return;
     setInviteToken(token);
@@ -356,13 +356,6 @@ export default function HomePage() {
       const { error } = await supabase.rpc("release_link", { p_link_id: linkId });
       if (error) throw error;
     }, "Đã trả link cho nhóm.");
-  }
-
-  async function requestJoin(groupId) {
-    await runAction(async () => {
-      const { error } = await supabase.rpc("request_to_join_group", { p_group_id: groupId });
-      if (error) throw error;
-    }, "Đã gửi yêu cầu tham gia. Chờ Owner phê duyệt nhé.");
   }
 
   async function reviewRequest(requestId, approve) {
