@@ -214,16 +214,22 @@ export default function HomePage() {
 
 
   useEffect(() => {
-    if (!user || !locks.some((lock) => lock.user_id === user.id)) return;
+    if (!user || !selectedGroup) return;
     const intervalId = window.setInterval(async () => {
-      const ownedLocks = locks.filter((lock) => lock.user_id === user.id);
-      for (const lock of ownedLocks) {
-        await supabase.rpc("renew_link_lock", { p_link_id: lock.link_id });
+      const { data: ownedLocks, error } = await supabase
+        .from("link_locks")
+        .select("link_id")
+        .eq("user_id", user.id)
+        .gt("expires_at", new Date().toISOString());
+      if (!error) {
+        for (const lock of ownedLocks || []) {
+          await supabase.rpc("renew_link_lock", { p_link_id: lock.link_id });
+        }
       }
       await refreshGroup(selectedGroup);
     }, 5 * 60 * 1000);
     return () => window.clearInterval(intervalId);
-  }, [user, locks, selectedGroup, refreshGroup]);
+  }, [user, selectedGroup, refreshGroup]);
 
   const visibleLinks = useMemo(() => {
     const keyword = search.trim().toLowerCase();
