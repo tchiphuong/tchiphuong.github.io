@@ -49,7 +49,9 @@ export default function HomePage() {
   const [notice, setNotice] = useState(null);
 
   const [groups, setGroups] = useState([]);
-  const [discoverableGroups, setDiscoverableGroups] = useState([]);
+  const [invitationPreview, setInvitationPreview] = useState(null);
+  const [inviteToken, setInviteToken] = useState("");
+  const [createdInviteUrl, setCreatedInviteUrl] = useState("");
   const [invitations, setInvitations] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -72,21 +74,19 @@ export default function HomePage() {
   const refreshWorkspace = useCallback(async (currentUser) => {
     if (!currentUser) {
       setGroups([]);
-      setDiscoverableGroups([]);
       setInvitations([]);
       setMyRequests([]);
       setSelectedGroup(null);
       return;
     }
 
-    const [membershipResult, discoverableResult, invitationResult, requestResult] = await Promise.all([
+    const [membershipResult, invitationResult, requestResult] = await Promise.all([
       supabase.from("group_members").select("group_id, role, groups(id, name, owner_id, is_discoverable)").eq("user_id", currentUser.id),
-      supabase.from("groups").select("id, name, owner_id, is_discoverable").eq("is_discoverable", true).order("created_at", { ascending: false }),
-      supabase.from("group_invitations").select("id, group_id, email, groups(name)").eq("status", "pending").ilike("email", currentUser.email || ""),
+      supabase.from("group_invitations").select("id, group_id, email, invite_token, status, groups(name)").in("status", ["pending", "requested"]).ilike("email", currentUser.email || ""),
       supabase.from("group_join_requests").select("id, group_id, status, requested_at, groups(name)").eq("user_id", currentUser.id).eq("status", "pending"),
     ]);
 
-    const firstError = [membershipResult, discoverableResult, invitationResult, requestResult].find((result) => result.error)?.error;
+    const firstError = [membershipResult, invitationResult, requestResult].find((result) => result.error)?.error;
     if (firstError) {
       setNotice({ type: "danger", message: messageOf(firstError) });
       return;
@@ -96,7 +96,6 @@ export default function HomePage() {
       .map((item) => ({ ...item.groups, role: item.role }))
       .filter(Boolean);
     setGroups(memberGroups);
-    setDiscoverableGroups(discoverableResult.data || []);
     setInvitations(invitationResult.data || []);
     setMyRequests(requestResult.data || []);
 
@@ -231,6 +230,18 @@ export default function HomePage() {
     return () => window.clearInterval(intervalId);
   }, [user, selectedGroup, refreshGroup]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const token = new URLSearchParams(window.location.search).get("invite");
+    if (!token) return;
+    setInviteToken(token);
+    supabase.rpc("get_invitation_preview", { p_token: token }).then(({ data, error }) => {
+      if (error) setNotice({ type: "danger", message: messageOf(error) });
+      else if (data?.[0]) setInvitationPreview(data[0]);
+      else setNotice({ type: "danger", message: "Link mời không hợp lệ, đã được sử dụng hoặc đã bị thu hồi." });
+    });
+  }, []);
+
   const visibleLinks = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return links.filter((link) => !keyword || `${link.title} ${link.url}`.toLowerCase().includes(keyword));
@@ -285,7 +296,7 @@ export default function HomePage() {
       const { error } = await supabase.from("groups").insert({
         name: newGroupName.trim(),
         owner_id: user.id,
-        is_discoverable: true,
+        is_discoverable: false,
       });
       if (error) throw error;
       setNewGroupName("");
@@ -315,14 +326,16 @@ export default function HomePage() {
     if (!selectedGroup || !inviteEmail.trim()) return;
     await runAction(async () => {
       const normalizedEmail = inviteEmail.trim().toLowerCase();
-      const { error } = await supabase.from("group_invitations").insert({
-        group_id: selectedGroup.id,
-        email: normalizedEmail,
-        invited_by: user.id,
-      });
+      const token = crypto.randomUUID();
+      const { data, error } = await supabase.from("group_invitations").insert({
+        group_id: selectedGroup.id, email: normalizedEmail, invited_by: user.id, invite_token: token,
+      }).select("invite_token").single();
       if (error) throw error;
+      const invitationUrl = `${window.location.origin}${window.location.pathname}?invite=${data.invite_token}`;
+      setCreatedInviteUrl(invitationUrl);
+      try { await navigator.clipboard.writeText(invitationUrl); } catch { /* Link remains visible for manual copying. */ }
       setInviteEmail("");
-    }, "Đã tạo lời mời. Thành viên đăng nhập bằng email được mời để chấp nhận.");
+    }, "Đã tạo link mời riêng. Gửi link đã sao chép cho đúng email được mời.");
   }
 
   async function claimLink(link) {
@@ -362,11 +375,13 @@ export default function HomePage() {
     }, approve ? "Đã phê duyệt thành viên." : "Đã từ chối yêu cầu.");
   }
 
-  async function acceptInvitation(invitationId) {
+  async function submitInvitationRequest() {
     await runAction(async () => {
-      const { error } = await supabase.rpc("accept_group_invitation", { p_invitation_id: invitationId });
+      const { error } = await supabase.rpc("request_to_join_by_invitation", { p_token: inviteToken });
       if (error) throw error;
-    }, "Đã tham gia nhóm.");
+      setInvitationPreview(null);
+      window.history.replaceState({}, "", window.location.pathname);
+    }, "Đã gửi yêu cầu tham gia. Chờ Owner phê duyệt nhé.");
   }
 
   async function confirmDeleteLink() {
@@ -457,11 +472,13 @@ export default function HomePage() {
 
       <Notice notice={notice} />
 
+      {invitationPreview && <Card className="mb-6"><Card.Header className="px-5 pt-5"><Card.Title>Lời mời tham gia nhóm</Card.Title><Card.Description>Nhóm: {invitationPreview.group_name} · Email được mời: {invitationPreview.invited_email}</Card.Description></Card.Header><Card.Content className="flex flex-wrap items-center justify-between gap-3 p-5 pt-3"><p className="text-sm text-muted">Đăng nhập bằng đúng email được mời. Owner cần phê duyệt trước khi mày truy cập nhóm.</p>{user ? <Button onPress={submitInvitationRequest} isDisabled={busy || user.email?.toLowerCase() !== invitationPreview.invited_email?.toLowerCase()}>Gửi yêu cầu tham gia</Button> : <p className="text-sm">Đăng nhập bằng email được mời để tiếp tục.</p>}</Card.Content></Card>}
+
       <section className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
         <Card>
           <Card.Header className="px-5 pt-5">
             <Card.Title>Nhóm của tao</Card.Title>
-            <Card.Description>{groups.length} nhóm đã tham gia</Card.Description>
+            <Card.Description>{groups.length} nhóm riêng tư đã tham gia</Card.Description>
           </Card.Header>
           <Card.Content className="flex flex-wrap gap-2 p-5 pt-3">
             {groups.map((group) => (
@@ -489,17 +506,9 @@ export default function HomePage() {
 
       {invitations.length > 0 && (
         <Card className="mb-6">
-          <Card.Header className="px-5 pt-5">
-            <Card.Title>Lời mời dành cho mày</Card.Title>
-            <Card.Description>Chỉ email được mời mới có thể chấp nhận.</Card.Description>
-          </Card.Header>
+          <Card.Header className="px-5 pt-5"><Card.Title>Lời mời của mày</Card.Title><Card.Description>Mở link mời để gửi yêu cầu tham gia; Owner sẽ duyệt.</Card.Description></Card.Header>
           <Card.Content className="space-y-3 p-5 pt-3">
-            {invitations.map((invitation) => (
-              <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm">{invitation.groups?.name || "Nhóm"} · {invitation.email}</p>
-                <Button size="sm" onPress={() => acceptInvitation(invitation.id)} isDisabled={busy}>Chấp nhận lời mời</Button>
-              </div>
-            ))}
+            {invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm">{invitation.groups?.name || "Nhóm"} · {invitation.status === "requested" ? "Đang chờ duyệt" : "Chưa gửi yêu cầu"}</p><Button size="sm" variant="outline" onPress={() => { window.location.href = `${window.location.origin}${window.location.pathname}?invite=${invitation.invite_token}`; }}>Mở lời mời</Button></div>)}
           </Card.Content>
         </Card>
       )}
@@ -601,12 +610,12 @@ export default function HomePage() {
                 <Card>
                   <Card.Header className="px-5 pt-5">
                     <Card.Title>Mời thành viên bằng email</Card.Title>
-                    <Card.Description>Lời mời sẽ xuất hiện trong tài khoản đăng ký bằng email này.</Card.Description>
+                    <Card.Description>Tạo link mời riêng gắn với email; người nhận gửi yêu cầu và chờ Owner duyệt.</Card.Description>
                   </Card.Header>
                   <Card.Content className="p-5 pt-3">
                     <form className="flex gap-2" onSubmit={sendInvitation}>
                       <Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="member@example.com" variant="secondary" fullWidth required />
-                      <Button type="submit" isDisabled={busy} isDisabled={!inviteEmail.trim()}>Mời</Button>
+                      <Button type="submit" isDisabled={busy || !inviteEmail.trim()}>Mời</Button>
                     </form>
                   </Card.Content>
                 </Card>
