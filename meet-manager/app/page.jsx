@@ -10,6 +10,7 @@ import {
   Input,
   Label,
   ListBox,
+  Link,
   Select,
   Separator,
 } from "@heroui/react";
@@ -215,24 +216,19 @@ export default function HomePage() {
   const count = (key) => meetings.filter((item) => item.status === key).length;
 
   const stats = [
-    { label: "Tổng cuộc họp", value: meetings.length, detail: "Tất cả cuộc họp", color: "accent" },
-    { label: "Đang họp", value: count("live"), detail: "Đang diễn ra", color: "success" },
-    { label: "Đã lên lịch", value: count("scheduled"), detail: "Chờ bắt đầu", color: "default" },
+    { label: "Tổng cuộc họp", value: meetings.length },
+    { label: "Đang họp", value: count("live") },
+    { label: "Đã lên lịch", value: count("scheduled") },
   ];
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-7 text-foreground sm:px-6 lg:px-8 lg:py-10">
-      <header className="mb-12 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-xl font-bold text-white shadow-lg shadow-blue-950/40">
-            M
-          </div>
-          <div>
-            <p className="font-semibold tracking-wide">Meet Manager</p>
-            <p className="text-xs text-muted">Personal meeting workspace</p>
-          </div>
+      <header className="mb-10 flex items-center gap-3">
+        <Chip color="accent" size="lg">MM</Chip>
+        <div>
+          <p className="font-semibold tracking-wide">Meet Manager</p>
+          <p className="text-xs text-muted">Personal meeting workspace</p>
         </div>
-        <Chip color="accent" variant="soft" size="sm">NEXT.JS · REACT · HEROUI V3</Chip>
       </header>
 
       <section className="mb-9 max-w-3xl">
@@ -247,10 +243,7 @@ export default function HomePage() {
         {stats.map((item) => (
           <Card key={item.label} variant="secondary" className="min-h-32">
             <Card.Content className="flex flex-col gap-3 p-5">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted">{item.label}</p>
-                <Chip color={item.color} variant="soft" size="sm">{item.detail}</Chip>
-              </div>
+              <p className="text-sm text-muted">{item.label}</p>
               <p className="text-3xl font-semibold tabular-nums">{item.value}</p>
             </Card.Content>
           </Card>
@@ -264,11 +257,9 @@ export default function HomePage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onPress={exportConfig} isDisabled={!ready}>
-            <span aria-hidden="true">↓</span>
             Export JSON
           </Button>
           <Button variant="secondary" onPress={() => fileRef.current?.click()}>
-            <span aria-hidden="true">↑</span>
             Import JSON
           </Button>
           <input
@@ -331,7 +322,6 @@ export default function HomePage() {
               </div>
 
               <Button type="submit" variant="primary" fullWidth>
-                <span aria-hidden="true">＋</span>
                 Thêm cuộc họp
               </Button>
             </form>
@@ -357,7 +347,6 @@ export default function HomePage() {
           <Card.Content className="px-5 pb-5">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-5 py-14 text-center">
-                <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-default/10 text-2xl" aria-hidden="true">⌕</div>
                 <p className="font-medium">{meetings.length ? "Không tìm thấy cuộc họp" : "Chưa có cuộc họp nào"}</p>
                 <p className="mt-2 max-w-sm text-sm text-muted">
                   {meetings.length
@@ -368,28 +357,26 @@ export default function HomePage() {
             ) : (
               <div className="space-y-3 pt-4">
                 {filtered.map((item) => (
-                  <article
-                    key={item.id}
-                    className="rounded-2xl border border-separator bg-surface-secondary/60 p-4 transition-colors hover:bg-surface-secondary"
-                  >
-                    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                      <div className="min-w-0">
-                        <h3 className="break-words font-medium">{item.title}</h3>
-                        <a
-                          className="mt-1 block break-all text-sm text-accent hover:underline"
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {item.url}
-                        </a>
-                      </div>
+                  <Card key={item.id} variant="secondary">
+                    <Card.Content className="flex flex-col gap-4 p-4">
+                      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                        <div className="min-w-0">
+                          <h3 className="break-words font-medium">{item.title}</h3>
+                          <Link
+                            className="mt-1 block break-all text-sm text-accent"
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {item.url}
+                          </Link>
+                        </div>
                       <Chip color={STATUS[item.status].color} variant="soft" size="sm">
                         {STATUS[item.status].label}
                       </Chip>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                       <StatusSelect
                         value={item.status}
                         onChange={(nextStatus) => updateStatus(item.id, nextStatus)}
@@ -398,8 +385,9 @@ export default function HomePage() {
                       <Button size="sm" variant="danger" onPress={() => requestDeleteMeeting(item.id)}>
                         Xóa
                       </Button>
-                    </div>
-                  </article>
+                      </div>
+                    </Card.Content>
+                  </Card>
                 ))}
               </div>
             )}
