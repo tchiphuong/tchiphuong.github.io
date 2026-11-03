@@ -116,14 +116,14 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 begin
   insert into public.group_members (group_id, user_id, role)
   values (new.id, new.owner_id, 'owner')
   on conflict (group_id, user_id) do nothing;
   return new;
 end;
-$;
+$$;
 
 -- SECURITY DEFINER helpers avoid recursive RLS evaluation between membership policies.
 create or replace function public.is_group_member(p_group_id uuid, p_user_id uuid default auth.uid())
@@ -132,12 +132,12 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $$
   select exists (
     select 1 from public.group_members gm
     where gm.group_id = p_group_id and gm.user_id = p_user_id
   );
-$;
+$$;
 
 create or replace function public.is_group_owner(p_group_id uuid, p_user_id uuid default auth.uid())
 returns boolean
@@ -145,12 +145,12 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $$
   select exists (
     select 1 from public.groups g
     where g.id = p_group_id and g.owner_id = p_user_id
   );
-$;
+$$;
 
 create or replace function public.is_group_peer(p_profile_id uuid)
 returns boolean
@@ -158,14 +158,14 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $$
   select exists (
     select 1
     from public.group_members mine
     join public.group_members theirs on theirs.group_id = mine.group_id
     where mine.user_id = auth.uid() and theirs.user_id = p_profile_id
   );
-$;
+$$;
 
 revoke all on function public.is_group_member(uuid, uuid) from public;
 revoke all on function public.is_group_owner(uuid, uuid) from public;
@@ -310,7 +310,7 @@ returns timestamptz
 language plpgsql
 security definer
 set search_path = public, auth
-as $
+as $$
 declare
   v_expires_at timestamptz := now() + interval '30 minutes';
 begin
@@ -325,7 +325,7 @@ begin
   if not found then raise exception 'Active lock not found'; end if;
   return v_expires_at;
 end;
-$;
+$$;
 
 create or replace function public.release_link(p_link_id uuid)
 returns void
