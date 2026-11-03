@@ -49,11 +49,6 @@ export default function HomePage() {
   const [notice, setNotice] = useState(null);
 
   const [groups, setGroups] = useState([]);
-  const [invitationPreview, setInvitationPreview] = useState(null);
-  const [inviteToken, setInviteToken] = useState("");
-  const [createdInviteUrl, setCreatedInviteUrl] = useState("");
-  const [invitations, setInvitations] = useState([]);
-  const [myRequests, setMyRequests] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [links, setLinks] = useState([]);
   const [locks, setLocks] = useState([]);
@@ -62,9 +57,9 @@ export default function HomePage() {
   const [linkHistory, setLinkHistory] = useState([]);
 
   const [newGroupName, setNewGroupName] = useState("");
-  const [newLinkTitle, setNewLinkTitle] = useState("");
+  const [newGroupCode, setNewGroupCode] = useState("");
+  const [joinGroupCode, setJoinGroupCode] = useState("");  const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -74,19 +69,13 @@ export default function HomePage() {
   const refreshWorkspace = useCallback(async (currentUser) => {
     if (!currentUser) {
       setGroups([]);
-      setInvitations([]);
-      setMyRequests([]);
       setSelectedGroup(null);
       return;
     }
 
-    const [membershipResult, invitationResult, requestResult] = await Promise.all([
-      supabase.from("group_members").select("group_id, role, groups(id, name, owner_id)").eq("user_id", currentUser.id),
-      supabase.from("group_invitations").select("id, group_id, email, invite_token, status, groups(name)").in("status", ["pending", "requested"]).ilike("email", currentUser.email || ""),
-      supabase.from("group_join_requests").select("id, group_id, status, requested_at, groups(name)").eq("user_id", currentUser.id).eq("status", "pending"),
-    ]);
+    const membershipResult = await supabase.from("group_members").select("group_id, role, groups(id, name, owner_id)").eq("user_id", currentUser.id);
 
-    const firstError = [membershipResult, invitationResult, requestResult].find((result) => result.error)?.error;
+    const firstError = membershipResult.error;
     if (firstError) {
       setNotice({ type: "danger", message: messageOf(firstError) });
       return;
@@ -96,8 +85,6 @@ export default function HomePage() {
       .map((item) => ({ ...item.groups, role: item.role }))
       .filter(Boolean);
     setGroups(memberGroups);
-    setInvitations(invitationResult.data || []);
-    setMyRequests(requestResult.data || []);
 
     setSelectedGroup((current) => {
       if (current && memberGroups.some((group) => group.id === current.id)) {
@@ -230,18 +217,6 @@ export default function HomePage() {
     return () => window.clearInterval(intervalId);
   }, [user, selectedGroup, refreshGroup]);
 
-  useEffect(() => {
-    if (!isSupabaseConfigured || typeof window === "undefined") return;
-    const token = new URLSearchParams(window.location.search).get("invite");
-    if (!token) return;
-    setInviteToken(token);
-    supabase.rpc("get_invitation_preview", { p_token: token }).then(({ data, error }) => {
-      if (error) setNotice({ type: "danger", message: messageOf(error) });
-      else if (data?.[0]) setInvitationPreview(data[0]);
-      else setNotice({ type: "danger", message: "Link mời không hợp lệ, đã được sử dụng hoặc đã bị thu hồi." });
-    });
-  }, []);
-
   const visibleLinks = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return links.filter((link) => !keyword || `${link.title} ${link.url}`.toLowerCase().includes(keyword));
@@ -291,16 +266,23 @@ export default function HomePage() {
 
   async function createGroup(event) {
     event.preventDefault();
-    if (!newGroupName.trim()) return;
+    if (!newGroupName.trim() || newGroupCode.trim().length < 6) return;
     await runAction(async () => {
-      const { error } = await supabase.from("groups").insert({
-        name: newGroupName.trim(),
-        owner_id: user.id,
-        is_discoverable: false,
-      });
+      const { error } = await supabase.rpc("create_private_group", { p_name: newGroupName.trim(), p_code: newGroupCode.trim() });
       if (error) throw error;
       setNewGroupName("");
-    }, "Đã tạo nhóm. Mày đang là Owner.");
+      setNewGroupCode("");
+    }, "Đã tạo room riêng tư. Gửi mã vào room cho người cần tham gia.");
+  }
+
+  async function joinGroup(event) {
+    event.preventDefault();
+    if (!joinGroupCode.trim()) return;
+    await runAction(async () => {
+      const { error } = await supabase.rpc("join_private_group", { p_code: joinGroupCode.trim() });
+      if (error) throw error;
+      setJoinGroupCode("");
+    }, "Vào room thành công.");
   }
 
   async function addLink(event) {
@@ -321,23 +303,6 @@ export default function HomePage() {
     }, "Đã thêm link vào nhóm.");
   }
 
-  async function sendInvitation(event) {
-    event.preventDefault();
-    if (!selectedGroup || !inviteEmail.trim()) return;
-    await runAction(async () => {
-      const normalizedEmail = inviteEmail.trim().toLowerCase();
-      const token = crypto.randomUUID();
-      const { data, error } = await supabase.from("group_invitations").insert({
-        group_id: selectedGroup.id, email: normalizedEmail, invited_by: user.id, invite_token: token,
-      }).select("invite_token").single();
-      if (error) throw error;
-      const invitationUrl = `${window.location.origin}${window.location.pathname}?invite=${data.invite_token}`;
-      setCreatedInviteUrl(invitationUrl);
-      try { await navigator.clipboard.writeText(invitationUrl); } catch { /* Link remains visible for manual copying. */ }
-      setInviteEmail("");
-    }, "Đã tạo link mời riêng. Gửi link đã sao chép cho đúng email được mời.");
-  }
-
   async function claimLink(link) {
     const popup = window.open("about:blank", "_blank");
     const claimed = await runAction(async () => {
@@ -356,25 +321,6 @@ export default function HomePage() {
       const { error } = await supabase.rpc("release_link", { p_link_id: linkId });
       if (error) throw error;
     }, "Đã trả link cho nhóm.");
-  }
-
-  async function reviewRequest(requestId, approve) {
-    await runAction(async () => {
-      const { error } = await supabase.rpc("review_group_join_request", {
-        p_request_id: requestId,
-        p_approve: approve,
-      });
-      if (error) throw error;
-    }, approve ? "Đã phê duyệt thành viên." : "Đã từ chối yêu cầu.");
-  }
-
-  async function submitInvitationRequest() {
-    await runAction(async () => {
-      const { error } = await supabase.rpc("request_to_join_by_invitation", { p_token: inviteToken });
-      if (error) throw error;
-      setInvitationPreview(null);
-      window.history.replaceState({}, "", window.location.pathname);
-    }, "Đã gửi yêu cầu tham gia. Chờ Owner phê duyệt nhé.");
   }
 
   async function confirmDeleteLink() {
@@ -465,8 +411,6 @@ export default function HomePage() {
 
       <Notice notice={notice} />
 
-      {invitationPreview && <Card className="mb-6"><Card.Header className="px-5 pt-5"><Card.Title>Lời mời tham gia nhóm</Card.Title><Card.Description>Nhóm: {invitationPreview.group_name} · Email được mời: {invitationPreview.invited_email}</Card.Description></Card.Header><Card.Content className="flex flex-wrap items-center justify-between gap-3 p-5 pt-3"><p className="text-sm text-muted">Đăng nhập bằng đúng email được mời. Owner cần phê duyệt trước khi mày truy cập nhóm.</p>{user ? <Button onPress={submitInvitationRequest} isDisabled={busy || user.email?.toLowerCase() !== invitationPreview.invited_email?.toLowerCase()}>Gửi yêu cầu tham gia</Button> : <p className="text-sm">Đăng nhập bằng email được mời để tiếp tục.</p>}</Card.Content></Card>}
-
       <section className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
         <Card>
           <Card.Header className="px-5 pt-5">
@@ -486,35 +430,30 @@ export default function HomePage() {
         <Card>
           <Card.Header className="px-5 pt-5">
             <Card.Title>Tạo nhóm mới</Card.Title>
-            <Card.Description>Mày sẽ là Owner của nhóm.</Card.Description>
+            <Card.Description>Room riêng tư. Mày tự đặt mã để chia sẻ cho thành viên.</Card.Description>
           </Card.Header>
           <Card.Content className="p-5 pt-3">
-            <form className="flex gap-2" onSubmit={createGroup}>
-              <Input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="Tên nhóm" variant="secondary" fullWidth />
-              <Button type="submit" isDisabled={busy || !newGroupName.trim()}><Icon icon="gravity-ui:plus" /> Tạo</Button>
+            <form className="flex flex-col gap-3" onSubmit={createGroup}>
+              <Input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="Tên room" variant="secondary" fullWidth required />
+              <Input type="password" value={newGroupCode} onChange={(event) => setNewGroupCode(event.target.value)} placeholder="Mã vào room (ít nhất 6 ký tự)" variant="secondary" fullWidth minLength={6} required />
+              <Button type="submit" isDisabled={busy || !newGroupName.trim() || newGroupCode.trim().length < 6}><Icon icon="gravity-ui:plus" /> Tạo room</Button>
             </form>
           </Card.Content>
         </Card>
       </section>
 
-      {invitations.length > 0 && (
-        <Card className="mb-6">
-          <Card.Header className="px-5 pt-5"><Card.Title>Lời mời của mày</Card.Title><Card.Description>Mở link mời để gửi yêu cầu tham gia; Owner sẽ duyệt.</Card.Description></Card.Header>
-          <Card.Content className="space-y-3 p-5 pt-3">
-            {invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm">{invitation.groups?.name || "Nhóm"} · {invitation.status === "requested" ? "Đang chờ Owner duyệt" : "Chưa gửi yêu cầu"}</p>{invitation.status === "pending" && <Button size="sm" variant="outline" onPress={() => { window.location.href = `${window.location.origin}${window.location.pathname}?invite=${invitation.invite_token}`; }}>Mở lời mời</Button>}</div>)}
+
+      <section className="mb-8 max-w-xl">
+        <Card>
+          <Card.Header className="px-5 pt-5"><Card.Title>Vào room</Card.Title><Card.Description>Nhập mã do Owner cung cấp để tham gia ngay.</Card.Description></Card.Header>
+          <Card.Content className="p-5 pt-3">
+            <form className="flex gap-2" onSubmit={joinGroup}>
+              <Input type="password" value={joinGroupCode} onChange={(event) => setJoinGroupCode(event.target.value)} placeholder="Mã vào room" variant="secondary" fullWidth required />
+              <Button type="submit" isDisabled={busy || !joinGroupCode.trim()}>Vào room</Button>
+            </form>
           </Card.Content>
         </Card>
-      )}
-
-      {myRequests.length > 0 && (
-        <Card className="mb-6">
-          <Card.Header className="px-5 pt-5"><Card.Title>Yêu cầu tham gia đang chờ</Card.Title></Card.Header>
-          <Card.Content className="space-y-2 p-5 pt-3">
-            {myRequests.map((request) => <p key={request.id} className="text-sm text-muted">{request.groups?.name || "Nhóm"} · Đang chờ Owner duyệt</p>)}
-          </Card.Content>
-        </Card>
-      )}
-
+      </section>
 
       {selectedGroup ? (
         <section className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -580,37 +519,6 @@ export default function HomePage() {
                   </Card.Content>
                 </Card>
 
-                <Card>
-                  <Card.Header className="px-5 pt-5">
-                    <Card.Title>Mời thành viên bằng email</Card.Title>
-                    <Card.Description>Tạo link mời riêng gắn với email; người nhận gửi yêu cầu và chờ Owner duyệt.</Card.Description>
-                  </Card.Header>
-                  <Card.Content className="p-5 pt-3">
-                    <form className="flex gap-2" onSubmit={sendInvitation}>
-                      <Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="member@example.com" variant="secondary" fullWidth required />
-                      <Button type="submit" isDisabled={busy || !inviteEmail.trim()}>Mời</Button>
-                    </form>
-                  </Card.Content>
-                </Card>
-
-                <Card>
-                  <Card.Header className="px-5 pt-5">
-                    <Card.Title>Yêu cầu chờ duyệt</Card.Title>
-                    <Card.Description>{requests.length} yêu cầu</Card.Description>
-                  </Card.Header>
-                  <Card.Content className="space-y-3 p-5 pt-3">
-                    {requests.map((request) => (
-                      <div key={request.id} className="space-y-2">
-                        <p className="break-all text-sm">{request.profile?.display_name || request.profile?.email || request.user_id}</p>
-                        <div className="flex gap-2">
-                          <Button size="sm" onPress={() => reviewRequest(request.id, true)} isDisabled={busy}>Duyệt</Button>
-                          <Button size="sm" variant="outline" onPress={() => reviewRequest(request.id, false)} isDisabled={busy}>Từ chối</Button>
-                        </div>
-                      </div>
-                    ))}
-                    {!requests.length && <p className="text-sm text-muted">Không có yêu cầu mới.</p>}
-                  </Card.Content>
-                </Card>
               </>
             )}
 
@@ -653,7 +561,7 @@ export default function HomePage() {
         <Card>
           <Card.Content className="p-8 text-center">
             <p className="font-medium">Chưa có nhóm được chọn</p>
-            <p className="mt-2 text-sm text-muted">Tạo nhóm mới, chấp nhận lời mời hoặc gửi yêu cầu tham gia một nhóm.</p>
+            <p className="mt-2 text-sm text-muted">Tạo room mới hoặc nhập mã để tham gia room riêng tư.</p>
           </Card.Content>
         </Card>
       )}
