@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "@iconify/react";
 import {
   Alert,
   AlertDialog,
@@ -257,9 +258,11 @@ export default function HomePage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onPress={exportConfig} isDisabled={!ready}>
+            <Icon icon="gravity-ui:arrow-down-to-line" />
             Export JSON
           </Button>
           <Button variant="secondary" onPress={() => fileRef.current?.click()}>
+            <Icon icon="gravity-ui:arrow-up-from-line" />
             Import JSON
           </Button>
           <Input
@@ -323,6 +326,7 @@ export default function HomePage() {
               </div>
 
               <Button type="submit" variant="primary" fullWidth>
+                <Icon icon="gravity-ui:plus" />
                 Thêm cuộc họp
               </Button>
             </form>
@@ -370,6 +374,7 @@ export default function HomePage() {
                             rel="noopener noreferrer"
                           >
                             {item.url}
+                            <Icon icon="gravity-ui:arrow-up-right-from-square" />
                           </Link>
                         </div>
                         <Chip color={STATUS[item.status].color} variant="soft" size="sm">
@@ -384,6 +389,7 @@ export default function HomePage() {
                           label={`Trạng thái của ${item.title}`}
                         />
                         <Button size="sm" variant="danger" onPress={() => requestDeleteMeeting(item.id)}>
+                          <Icon icon="gravity-ui:trash-bin" />
                           Xóa
                         </Button>
                       </div>
