@@ -6,13 +6,7 @@
   --page-bg: #090e1a;
 }
 
-html,
 body {
-  min-height: 100%;
-}
-
-body {
-  margin: 0;
   color: var(--foreground);
   background:
     radial-gradient(ellipse at 78% -12%, rgba(44, 91, 158, 0.24), transparent 38%),
@@ -20,22 +14,9 @@ body {
   font-feature-settings: "ss01" on, "cv11" on;
 }
 
-* {
-  box-sizing: border-box;
-}
-
 ::selection {
   color: white;
   background: rgba(87, 142, 255, 0.38);
-}
-
-button,
-input {
-  font: inherit;
-}
-
-a {
-  text-underline-offset: 3px;
 }
 
 :focus-visible {
