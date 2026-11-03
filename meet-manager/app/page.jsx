@@ -212,6 +212,19 @@ export default function HomePage() {
     };
   }, [user, selectedGroup, refreshGroup]);
 
+
+  useEffect(() => {
+    if (!user || !locks.some((lock) => lock.user_id === user.id)) return;
+    const intervalId = window.setInterval(async () => {
+      const ownedLocks = locks.filter((lock) => lock.user_id === user.id);
+      for (const lock of ownedLocks) {
+        await supabase.rpc("renew_link_lock", { p_link_id: lock.link_id });
+      }
+      await refreshGroup(selectedGroup);
+    }, 5 * 60 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, [user, locks, selectedGroup, refreshGroup]);
+
   const visibleLinks = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return links.filter((link) => !keyword || `${link.title} ${link.url}`.toLowerCase().includes(keyword));
@@ -225,8 +238,10 @@ export default function HomePage() {
       if (successMessage) setNotice({ type: "success", message: successMessage });
       await refreshWorkspace(user);
       await refreshGroup(selectedGroup);
+      return true;
     } catch (error) {
       setNotice({ type: "danger", message: messageOf(error) });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -306,19 +321,15 @@ export default function HomePage() {
 
   async function claimLink(link) {
     const popup = window.open("about:blank", "_blank");
-    await runAction(async () => {
+    const claimed = await runAction(async () => {
       const { error } = await supabase.rpc("claim_link", { p_link_id: link.id });
       if (error) throw error;
       if (popup) {
         popup.opener = null;
         popup.location.href = link.url;
-      } else {
-        setNotice({ type: "success", message: "Đã giữ link trong 30 phút. Trình duyệt đã chặn tab mới; hãy mở link bằng nút bên dưới." });
       }
-    }, "Đã giữ link trong 30 phút.");
-    if (popup && !locks.some((item) => item.link_id === link.id)) {
-      // Keep the reserved tab open only after the database confirms the lock.
-    }
+    }, popup ? "Đã giữ link trong 30 phút." : "Đã giữ link trong 30 phút. Trình duyệt chặn tab mới; dùng nút mở link ở danh sách.");
+    if (!claimed && popup) popup.close();
   }
 
   async function releaseLink(linkId) {
@@ -552,6 +563,7 @@ export default function HomePage() {
                       )}
                       <div className="flex flex-wrap gap-2">
                         {!lock && <Button size="sm" onPress={() => claimLink(link)} isDisabled={busy}><Icon icon="gravity-ui:hand" /> Giữ link & mở</Button>}
+                        {mine && <Button size="sm" variant="secondary" onPress={() => window.open(link.url, "_blank", "noopener,noreferrer")}><Icon icon="gravity-ui:arrow-up-right-from-square" /> Mở link</Button>}
                         {mine && <Button size="sm" variant="secondary" onPress={() => releaseLink(link.id)} isDisabled={busy}><Icon icon="gravity-ui:unlock" /> Trả link</Button>}
                         {isOwner && <Button size="sm" variant="danger" onPress={() => setDeleteTarget(link)} isDisabled={busy}><Icon icon="gravity-ui:trash-bin" /> Xóa</Button>}
                       </div>
