@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Alert, AlertDialog, Button, Card, Chip, Input, Link as HeroLink, Separator } from "@heroui/react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
@@ -61,6 +61,8 @@ export default function HomePage() {
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupCode, setNewGroupCode] = useState("");
   const [joinGroupCode, setJoinGroupCode] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const inviteHandled = useRef(false);
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [search, setSearch] = useState("");
@@ -183,6 +185,30 @@ export default function HomePage() {
   }, [refreshWorkspace]);
 
   useEffect(() => {
+    if (!user || inviteHandled.current) return;
+    const inviteCodeFromUrl = new URLSearchParams(window.location.search).get("join");
+    if (!inviteCodeFromUrl) return;
+
+    inviteHandled.current = true;
+    window.history.replaceState({}, "", window.location.pathname);
+
+    (async () => {
+      setBusy(true);
+      setNotice(null);
+      try {
+        const { error } = await supabase.rpc("join_private_group", { p_code: inviteCodeFromUrl });
+        if (error) throw error;
+        setNotice({ type: "success", message: "Đã tham gia room từ link mời." });
+        await refreshWorkspace(user);
+      } catch (error) {
+        setNotice({ type: "danger", message: messageOf(error) });
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [user, refreshWorkspace]);
+
+  useEffect(() => {
     refreshGroup(selectedGroup);
   }, [selectedGroup, refreshGroup]);
 
@@ -287,6 +313,21 @@ export default function HomePage() {
       setJoinGroupCode("");
     }, "Vào room thành công.");
   }
+  async function copyInviteLink() {
+    const code = inviteCode.trim();
+    if (!selectedGroup || code.length < 6) return;
+    const inviteUrl = new URL(window.location.href);
+    inviteUrl.search = "";
+    inviteUrl.hash = "";
+    inviteUrl.searchParams.set("join", code);
+    try {
+      await navigator.clipboard.writeText(inviteUrl.toString());
+      setNotice({ type: "success", message: "Đã copy link mời. Ai có link này đều có thể tham gia room." });
+    } catch {
+      setNotice({ type: "danger", message: "Không thể tự động copy. Hãy kiểm tra quyền clipboard của trình duyệt." });
+    }
+  }
+
 
   async function addLink(event) {
     event.preventDefault();
@@ -374,7 +415,7 @@ export default function HomePage() {
         <Card>
           <Card.Header className="px-5 pt-5">
             <Card.Title>{authMode === "signin" ? "Đăng nhập" : "Tạo tài khoản"}</Card.Title>
-            <Card.Description>Dùng email cá nhân để tham gia các nhóm được duyệt.</Card.Description>
+            <Card.Description>Đăng nhập để quản lý room và sử dụng link dùng chung.</Card.Description>
           </Card.Header>
           <Card.Content className="p-5">
             <form className="flex flex-col gap-4" onSubmit={handleAuth}>
@@ -524,6 +565,27 @@ export default function HomePage() {
 
               </>
             )}
+
+            <Card>
+              <Card.Header className="px-5 pt-5">
+                <Card.Title>Chia sẻ room</Card.Title>
+                <Card.Description>Tạo link mời. Người nhận đăng nhập xong sẽ tự động vào room này.</Card.Description>
+              </Card.Header>
+              <Card.Content className="flex flex-col gap-3 p-5 pt-3">
+                <Input
+                  type="password"
+                  value={inviteCode}
+                  onChange={(event) => setInviteCode(event.target.value)}
+                  placeholder="Nhập mã vào room"
+                  variant="secondary"
+                  fullWidth
+                />
+                <Button fullWidth onPress={copyInviteLink} isDisabled={busy || inviteCode.trim().length < 6}>
+                  <Icon icon="gravity-ui:link" /> Copy link mời
+                </Button>
+                <p className="text-xs text-muted">Lưu ý: bất kỳ ai có link đều có thể tham gia. Chỉ chia sẻ với người mày tin tưởng.</p>
+              </Card.Content>
+            </Card>
 
             <Card>
               <Card.Header className="px-5 pt-5">
