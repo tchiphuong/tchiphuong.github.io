@@ -6,37 +6,38 @@
   --page-bg: #090e1a;
 }
 
-html, body {
+html,
+body {
   min-height: 100%;
 }
 
 body {
   margin: 0;
-  background:
-    radial-gradient(ellipse at 78% -12%, rgba(44, 91, 158, .26), transparent 38%),
-    var(--page-bg);
-}
-
-* { box-sizing: border-box; }
-
-::selection { background: rgba(87, 142, 255, .35); }
-
-.meet-input {
-  width: 100%;
-}
-
-.meet-panel {
-  border: 1px solid rgba(148, 163, 184, .14);
-  background: rgba(17, 27, 44, .82);
-  backdrop-filter: blur(18px);
-}
-
-.meet-select {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
   color: var(--foreground);
-  padding: 0 12px;
+  background:
+    radial-gradient(ellipse at 78% -12%, rgba(44, 91, 158, 0.24), transparent 38%),
+    var(--page-bg);
+  font-feature-settings: "ss01" on, "cv11" on;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  color: white;
+  background: rgba(87, 142, 255, 0.38);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+a {
+  text-underline-offset: 3px;
+}
+
+:focus-visible {
+  outline-color: var(--focus);
 }
