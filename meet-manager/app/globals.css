@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "@heroui/styles";
 
@@ -11,6 +12,7 @@ body {
   background:
     radial-gradient(ellipse at 78% -12%, rgba(44, 91, 158, 0.24), transparent 38%),
     var(--page-bg);
+  font-family: "Inter", sans-serif;
   font-feature-settings: "ss01" on, "cv11" on;
 }
 
