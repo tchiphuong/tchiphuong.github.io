@@ -586,6 +586,7 @@ export default function HomePage() {
 )}
 
       {isRoomPage && selectedGroup ? (
+        <>
         <section className="space-y-5">
           <UsageLineChart history={linkHistory} />
           <ActivityTimeline history={linkHistory} />
@@ -723,6 +724,7 @@ export default function HomePage() {
             </Card>
           </div>
         </section>
+        </>
       ) : isRoomPage ? (
         <Card>
           <Card.Content className="p-8 text-center">
