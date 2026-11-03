@@ -9,6 +9,8 @@ const ERROR_TEXT = {
   "This link is already in use": "Link đang được thành viên khác sử dụng.",
   "You are already a member": "Mày đã là thành viên của nhóm này.",
   "Request not found or permission denied": "Không tìm thấy yêu cầu hoặc mày không có quyền duyệt.",
+  "Invalid room code": "Mã vào room không đúng.",
+  "This join code is already used. Choose another one": "Mã này đã được sử dụng. Hãy chọn mã khác.",
 };
 
 function messageOf(error) {
@@ -58,7 +60,8 @@ export default function HomePage() {
 
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupCode, setNewGroupCode] = useState("");
-  const [joinGroupCode, setJoinGroupCode] = useState("");  const [newLinkTitle, setNewLinkTitle] = useState("");
+  const [joinGroupCode, setJoinGroupCode] = useState("");
+  const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -414,8 +417,8 @@ export default function HomePage() {
       <section className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
         <Card>
           <Card.Header className="px-5 pt-5">
-            <Card.Title>Nhóm của tao</Card.Title>
-            <Card.Description>{groups.length} nhóm riêng tư đã tham gia</Card.Description>
+            <Card.Title>Room của tao</Card.Title>
+            <Card.Description>{groups.length} room riêng tư đã tham gia</Card.Description>
           </Card.Header>
           <Card.Content className="flex flex-wrap gap-2 p-5 pt-3">
             {groups.map((group) => (
