@@ -304,6 +304,29 @@ begin
 end;
 $$;
 
+
+create or replace function public.renew_link_lock(p_link_id uuid)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = public, auth
+as $
+declare
+  v_expires_at timestamptz := now() + interval '30 minutes';
+begin
+  if auth.uid() is null then raise exception 'Authentication required'; end if;
+
+  update public.link_locks
+  set expires_at = v_expires_at
+  where link_id = p_link_id
+    and user_id = auth.uid()
+    and expires_at > now();
+
+  if not found then raise exception 'Active lock not found'; end if;
+  return v_expires_at;
+end;
+$;
+
 create or replace function public.release_link(p_link_id uuid)
 returns void
 language plpgsql
@@ -350,7 +373,16 @@ alter table public.link_usage_history enable row level security;
 drop policy if exists "Profiles visible to self and group peers" on public.profiles;
 create policy "Profiles visible to self and group peers" on public.profiles
 for select to authenticated
-using (id = (select auth.uid()) or public.is_group_peer(id));
+using (
+  id = (select auth.uid())
+  or public.is_group_peer(id)
+  or exists (
+    select 1 from public.group_join_requests r
+    where r.user_id = profiles.id
+      and r.status = 'pending'
+      and public.is_group_owner(r.group_id)
+  )
+);
 
 drop policy if exists "Users update own profile" on public.profiles;
 create policy "Users update own profile" on public.profiles
@@ -445,6 +477,7 @@ grant execute on function public.request_to_join_group(uuid) to authenticated;
 grant execute on function public.review_group_join_request(uuid, boolean) to authenticated;
 grant execute on function public.accept_group_invitation(uuid) to authenticated;
 grant execute on function public.claim_link(uuid) to authenticated;
+grant execute on function public.renew_link_lock(uuid) to authenticated;
 grant execute on function public.release_link(uuid) to authenticated;
 
 -- Enable realtime for link state and membership workflow updates.
